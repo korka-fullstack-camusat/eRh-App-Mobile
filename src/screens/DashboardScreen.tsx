@@ -135,7 +135,7 @@ export default function DashboardScreen() {
 
   const fullName = employee ? `${employee.prenom} ${employee.nom}` : user?.username || 'Employé';
   const firstName = fullName.split(' ')[0];
-  const totalRemaining = balances.reduce((s, b) => s + (b.remaining_days ?? 0), 0);
+  const totalRemaining = balances.reduce((s, b) => s + (b.remaining_days ?? b.remaining ?? 0), 0);
 
   // Congés du mois en cours (approuvés dont les dates chevauchent ce mois)
   const monthStart = format(startOfMonth(today), 'yyyy-MM-dd');
@@ -249,8 +249,8 @@ export default function DashboardScreen() {
           {balances.length > 0 && (
             <View style={styles.balancesList}>
               {balances.map((b, i) => {
-                const remaining = b.remaining_days ?? 0;
-                const total = b.total_days ?? 0;
+                const remaining = b.remaining_days ?? b.remaining ?? 0;
+                const total = b.total_days ?? b.acquired ?? 0;
                 const pct = total > 0 ? Math.min((remaining / total) * 100, 100) : 0;
                 return (
                   <View key={i} style={[styles.balanceRow, i < balances.length - 1 && styles.balanceRowBorder]}>
