@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, ActivityIndicator,
+  View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,7 +39,7 @@ function Section({ title, icon, children }: SectionProps) {
 
 export default function DossierScreen() {
   const { employee, isLoading } = useEmployee();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
 
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
@@ -110,6 +110,12 @@ export default function DossierScreen() {
           <InfoRow label="Email compte" value={user?.email} icon="mail-outline" />
         </Section>
 
+        {/* Déconnexion */}
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => logout()}>
+          <Ionicons name="log-out-outline" size={20} color={COLORS.danger} />
+          <Text style={styles.logoutText}>Se déconnecter</Text>
+        </TouchableOpacity>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -161,4 +167,10 @@ const styles = StyleSheet.create({
   rowContent: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
   rowLabel: { fontSize: 13, color: COLORS.textSecondary, flex: 1 },
   rowValue: { fontSize: 13, color: COLORS.text, fontWeight: '500', maxWidth: '55%', textAlign: 'right' },
+  logoutBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: COLORS.white, borderRadius: 12, paddingVertical: 14, marginTop: 8,
+    borderWidth: 1.5, borderColor: COLORS.danger,
+  },
+  logoutText: { fontSize: 15, color: COLORS.danger, fontWeight: '600' },
 });

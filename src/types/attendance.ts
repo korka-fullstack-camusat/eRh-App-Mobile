@@ -1,4 +1,29 @@
-export type AttendanceStatus = 'ok' | 'absent' | 'incomplete' | 'anomaly';
+export type AttendanceStatus = 'ok' | 'present' | 'absent' | 'incomplete' | 'anomaly';
+
+export interface EmployeePeriodDetailDay {
+  date: string;
+  weekday_label?: string;
+  status: AttendanceStatus;
+  in_time?: string | null;
+  out_time?: string | null;
+  worked_minutes?: number | null;
+  expected_minutes?: number | null;
+  late_minutes?: number | null;
+  flags?: Record<string, any>;
+}
+
+export interface EmployeePeriodDetailResponse {
+  employee_id?: number;
+  matricule?: string;
+  full_name?: string;
+  start?: string;
+  end?: string;
+  days: EmployeePeriodDetailDay[];
+  total_worked_minutes?: number;
+  total_expected_minutes?: number;
+  present_days?: number;
+  absent_days?: number;
+}
 
 export interface DailyRecord {
   employee_id: number;

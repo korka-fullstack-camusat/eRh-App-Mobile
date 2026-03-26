@@ -1,20 +1,23 @@
 import { DefaultTheme } from 'react-native-paper';
 
 export const COLORS = {
-  primary: '#1E3A5F',
-  primaryLight: '#2E5F9F',
-  secondary: '#F0A500',
+  primary: '#003C71',       // Camusat navy blue
+  primaryLight: '#1A5A9E',
+  primaryDark: '#002A50',
+  accent: '#E30613',        // Camusat red
+  secondary: '#F0A500',     // Amber/gold
   success: '#28A745',
   danger: '#DC3545',
   warning: '#FFC107',
   info: '#17A2B8',
-  background: '#F4F6F9',
+  background: '#F5F7FA',
   surface: '#FFFFFF',
-  text: '#212529',
+  text: '#1A1A2E',
   textSecondary: '#6C757D',
-  border: '#DEE2E6',
+  border: '#E2E8F0',
   white: '#FFFFFF',
   black: '#000000',
+  cardShadow: 'rgba(0,60,113,0.08)',
 };
 
 export const theme = {

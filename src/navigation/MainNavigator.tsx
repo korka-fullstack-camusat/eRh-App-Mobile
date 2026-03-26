@@ -1,8 +1,10 @@
 import React from 'react';
+import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/theme';
+import CamusatLogo from '@/components/CamusatLogo';
 
 import DashboardScreen from '@/screens/DashboardScreen';
 import AttendanceScreen from '@/screens/attendance/AttendanceScreen';
@@ -26,6 +28,14 @@ export type DossierStackParamList = {
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const DossierStack = createNativeStackNavigator<DossierStackParamList>();
+
+function HeaderLogo() {
+  return (
+    <View style={{ paddingLeft: 4 }}>
+      <CamusatLogo size={28} showText={true} textColor={COLORS.white} />
+    </View>
+  );
+}
 
 function DossierStackNavigator() {
   return (
@@ -56,15 +66,17 @@ export default function MainNavigator() {
       screenOptions={({ route }) => ({
         headerStyle: { backgroundColor: COLORS.primary },
         headerTintColor: COLORS.white,
-        headerTitleStyle: { fontWeight: 'bold' },
+        headerTitleStyle: { fontWeight: 'bold', fontSize: 17 },
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarStyle: {
           backgroundColor: COLORS.white,
           borderTopColor: COLORS.border,
-          paddingBottom: 4,
-          height: 60,
+          paddingBottom: 6,
+          paddingTop: 4,
+          height: 64,
         },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
           if (route.name === 'DashboardTab') {
@@ -85,7 +97,10 @@ export default function MainNavigator() {
       <Tab.Screen
         name="DashboardTab"
         component={DashboardScreen}
-        options={{ title: 'Accueil', headerTitle: 'eRH Employé' }}
+        options={{
+          title: 'Accueil',
+          headerTitle: () => <HeaderLogo />,
+        }}
       />
       <Tab.Screen
         name="LeavesTab"

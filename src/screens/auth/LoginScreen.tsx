@@ -1,20 +1,13 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  Alert,
-  ScrollView,
+  View, Text, TextInput, TouchableOpacity, StyleSheet,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { COLORS } from '@/theme';
+import CamusatLogo from '@/components/CamusatLogo';
 
 export default function LoginScreen() {
   const { login } = useAuth();
@@ -32,7 +25,6 @@ export default function LoginScreen() {
     try {
       await login({ username: username.trim(), password });
     } catch (error: any) {
-      // Réseau inaccessible
       if (!error?.response) {
         Alert.alert(
           'Erreur réseau',
@@ -40,7 +32,6 @@ export default function LoginScreen() {
         );
         return;
       }
-      // Erreur HTTP du serveur
       const status = error.response.status;
       const data = error.response.data;
       const msg =
@@ -63,13 +54,11 @@ export default function LoginScreen() {
         style={styles.keyboardView}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          {/* Header */}
+          {/* Header with Camusat Logo */}
           <View style={styles.header}>
-            <View style={styles.logoContainer}>
-              <Ionicons name="business" size={48} color={COLORS.white} />
-            </View>
-            <Text style={styles.appName}>eRH Employer</Text>
-            <Text style={styles.subtitle}>Gestion des Ressources Humaines</Text>
+            <CamusatLogo size={64} showText={false} />
+            <Text style={styles.appName}>eRH Mobile</Text>
+            <Text style={styles.subtitle}>Espace Employé</Text>
           </View>
 
           {/* Form */}
@@ -77,14 +66,14 @@ export default function LoginScreen() {
             <Text style={styles.formTitle}>Connexion</Text>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Nom d'utilisateur</Text>
+              <Text style={styles.label}>Identifiant</Text>
               <View style={styles.inputWrapper}>
                 <Ionicons name="person-outline" size={20} color={COLORS.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={username}
                   onChangeText={setUsername}
-                  placeholder="Votre identifiant"
+                  placeholder="Matricule ou email"
                   placeholderTextColor={COLORS.textSecondary}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -130,7 +119,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.footer}>© 2025 CAMUSAT — eRH Employer</Text>
+          <Text style={styles.footer}>CAMUSAT — eRH Employé v1.0</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -138,111 +127,32 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.primary,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: 24,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  logoContainer: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  appName: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
-  },
+  container: { flex: 1, backgroundColor: COLORS.primary },
+  keyboardView: { flex: 1 },
+  scrollContent: { flexGrow: 1, justifyContent: 'center', padding: 24 },
+  header: { alignItems: 'center', marginBottom: 36 },
+  appName: { fontSize: 28, fontWeight: 'bold', color: COLORS.white, marginTop: 16 },
+  subtitle: { fontSize: 15, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
   formContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: COLORS.white, borderRadius: 20, padding: 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12, shadowRadius: 16, elevation: 10,
   },
-  formTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: COLORS.text,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  inputGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
+  formTitle: { fontSize: 20, fontWeight: 'bold', color: COLORS.text, marginBottom: 24, textAlign: 'center' },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   inputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.border,
-    borderRadius: 10,
-    backgroundColor: COLORS.background,
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12, backgroundColor: COLORS.background,
   },
-  inputIcon: {
-    paddingLeft: 12,
-  },
-  input: {
-    flex: 1,
-    height: 48,
-    paddingHorizontal: 10,
-    fontSize: 15,
-    color: COLORS.text,
-  },
-  eyeIcon: {
-    paddingRight: 12,
-    padding: 4,
-  },
+  inputIcon: { paddingLeft: 14 },
+  input: { flex: 1, height: 50, paddingHorizontal: 10, fontSize: 15, color: COLORS.text },
+  eyeIcon: { paddingRight: 14, padding: 4 },
   loginButton: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 8,
+    backgroundColor: COLORS.primary, borderRadius: 12, height: 52,
+    justifyContent: 'center', alignItems: 'center', marginTop: 8,
   },
-  loginButtonDisabled: {
-    opacity: 0.7,
-  },
-  loginButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  footer: {
-    textAlign: 'center',
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 12,
-    marginTop: 32,
-  },
+  loginButtonDisabled: { opacity: 0.7 },
+  loginButtonText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
+  footer: { textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 32 },
 });
