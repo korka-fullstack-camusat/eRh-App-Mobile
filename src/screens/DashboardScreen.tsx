@@ -1,25 +1,34 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl,
-  TouchableOpacity, ActivityIndicator, Modal, Animated,
+  TouchableOpacity, ActivityIndicator, Modal, TextInput,
+  Alert, Animated, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployee } from '@/contexts/EmployeeContext';
-import { getMyLeaveBalances } from '@/services/leaveService';
+import {
+  getMyLeaveBalances, getMyLeaveRequests,
+  getLeaveTypes, createLeaveRequest,
+} from '@/services/leaveService';
 import { getMyAttendance } from '@/services/attendanceService';
-import type { LeaveBalance } from '@/types/leave';
+import type { LeaveBalance, LeaveRequest, LeaveType } from '@/types/leave';
 import type { EmployeePeriodDetailDay } from '@/types/attendance';
 import { COLORS } from '@/theme';
+import CamusatLogo from '@/components/CamusatLogo';
 import {
-  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  format, startOfMonth, endOfMonth,
+  startOfWeek, endOfWeek,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
+
+const AnimatedSvgCircle = Animated.createAnimatedComponent(SvgCircle);
 
 function fmtTime(val?: string | null): string {
-  if (!val) return '--:--';
+  if (!val) return '-- : --';
   const iso = val.match(/T(\d{2}):(\d{2})/);
   if (iso) return `${iso[1]}:${iso[2]}`;
   const hms = val.match(/^(\d{2}):(\d{2})/);
@@ -28,68 +37,99 @@ function fmtTime(val?: string | null): string {
 }
 
 function minutesToTime(min?: number | null): string {
-  if (!min && min !== 0) return '--';
+  if (!min && min !== 0) return 'en cours...';
   const h = Math.floor(Math.abs(min) / 60);
   const m = Math.abs(min) % 60;
   return `${h}h${m > 0 ? String(m).padStart(2, '0') : ''}`;
 }
 
-function formatDays(val: number): string {
-  const rounded = Math.round(val * 10) / 10;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+function getInitials(firstName?: string, lastName?: string): string {
+  const f = (firstName || '').charAt(0).toUpperCase();
+  const l = (lastName || '').charAt(0).toUpperCase();
+  return `${f}${l}` || '??';
 }
-
-const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
-  ok:         { label: 'Pr\u00e9sent',   color: COLORS.success, bg: '#DCFCE7' },
-  present:    { label: 'Pr\u00e9sent',   color: COLORS.success, bg: '#DCFCE7' },
-  absent:     { label: 'Absent',    color: COLORS.danger,  bg: '#FEE2E2' },
-  incomplete: { label: 'Incomplet', color: COLORS.warning, bg: '#FEF3C7' },
-  anomaly:    { label: 'Anomalie',  color: '#6366F1',      bg: '#EEF2FF' },
-};
 
 export default function DashboardScreen() {
   const { user } = useAuth();
   const { employee, isLoading: empLoading } = useEmployee();
   const navigation = useNavigation<any>();
 
-  const [balances, setBalances]     = useState<LeaveBalance[]>([]);
-  const [allDays, setAllDays]       = useState<EmployeePeriodDetailDay[]>([]);
+  const [balances, setBalances] = useState<LeaveBalance[]>([]);
+  const [allDays, setAllDays] = useState<EmployeePeriodDetailDay[]>([]);
+  const [allLeaves, setAllLeaves] = useState<LeaveRequest[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [showPtModal, setShowPtModal] = useState(false);
 
-  // Animations d'entr\u00e9e (stagger)
-  const bannerAnim = useRef(new Animated.Value(0)).current;
-  const card1Anim  = useRef(new Animated.Value(0)).current;
-  const card2Anim  = useRef(new Animated.Value(0)).current;
+  // Modal states
+  const [showPtModal, setShowPtModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [selType, setSelType] = useState<number | null>(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  // Animations
+  const headerFade = useRef(new Animated.Value(0)).current;
+  const headerSlide = useRef(new Animated.Value(-30)).current;
+  const card1Fade = useRef(new Animated.Value(0)).current;
+  const card1Slide = useRef(new Animated.Value(40)).current;
+  const card2Fade = useRef(new Animated.Value(0)).current;
+  const card2Slide = useRef(new Animated.Value(40)).current;
+  const alertFade = useRef(new Animated.Value(0)).current;
+  const alertSlide = useRef(new Animated.Value(40)).current;
+  const circleProgress = useRef(new Animated.Value(0)).current;
+
+  const today = new Date();
+  const todayStr = format(today, 'yyyy-MM-dd');
+  const todayLabel = format(today, 'EEEE d MMMM yyyy', { locale: fr });
 
   useEffect(() => {
-    Animated.stagger(130, [
-      Animated.spring(bannerAnim, { toValue: 1, tension: 60, friction: 9, useNativeDriver: true }),
-      Animated.spring(card1Anim,  { toValue: 1, tension: 60, friction: 9, useNativeDriver: true }),
-      Animated.spring(card2Anim,  { toValue: 1, tension: 60, friction: 9, useNativeDriver: true }),
+    // Staggered entrance animations
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(headerFade, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.spring(headerSlide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(card1Fade, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(card1Slide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(card2Fade, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(card2Slide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(alertFade, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(alertSlide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
+      ]),
     ]).start();
   }, []);
-
-  const today    = new Date();
-  const todayStr = format(today, 'yyyy-MM-dd');
-  const rawDate  = format(today, 'EEEE d MMMM yyyy', { locale: fr });
-  const todayLabel = rawDate.charAt(0).toUpperCase() + rawDate.slice(1);
 
   const loadData = useCallback(async () => {
     if (!employee) return;
     const start = format(startOfMonth(today), 'yyyy-MM-dd');
-    const end   = format(endOfMonth(today),   'yyyy-MM-dd');
+    const end = format(endOfMonth(today), 'yyyy-MM-dd');
 
-    const [bal, att] = await Promise.allSettled([
+    const [bal, att, reqs, types] = await Promise.allSettled([
       getMyLeaveBalances(employee.id),
       getMyAttendance({ employee_id: employee.id, start, end }),
+      getMyLeaveRequests(employee.id),
+      getLeaveTypes(),
     ]);
 
     if (bal.status === 'fulfilled') setBalances(bal.value);
     if (att.status === 'fulfilled') setAllDays(att.value.days ?? []);
+    if (reqs.status === 'fulfilled') setAllLeaves(reqs.value);
+    if (types.status === 'fulfilled') setLeaveTypes(types.value);
   }, [employee]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Animate circle when balances change
+  useEffect(() => {
+    Animated.timing(circleProgress, { toValue: 1, duration: 1000, useNativeDriver: false }).start();
+  }, [balances]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -97,26 +137,95 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, [loadData]);
 
-  const todayRecord  = allDays.find(d => d.date === todayStr) ?? null;
-  const weekStart    = startOfWeek(today, { weekStartsOn: 1 });
-  const weekEnd      = endOfWeek(today,   { weekStartsOn: 1 });
-  const weekDays     = allDays.filter(d =>
-    d.date >= format(weekStart, 'yyyy-MM-dd') && d.date <= format(weekEnd, 'yyyy-MM-dd')
+  const handleSubmit = async () => {
+    if (!employee || !selType || !startDate || !endDate) {
+      Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires.');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      Alert.alert('Erreur', 'Format invalide. Utilisez AAAA-MM-JJ.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await createLeaveRequest({
+        employee: employee.id, leave_type: selType,
+        start_date: startDate, end_date: endDate, reason,
+      });
+      setShowModal(false);
+      setSelType(null); setStartDate(''); setEndDate(''); setReason('');
+      await loadData();
+      Alert.alert('Succès', 'Demande soumise avec succès.');
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.response?.data?.detail || 'Erreur lors de la soumission.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // ── Pointage ──
+  const todayRecord = allDays.find(d => d.date === todayStr) ?? null;
+  const getPointageStatus = () => {
+    if (!todayRecord) return { label: 'Aucun pointage', color: COLORS.textSecondary, isIncomplete: false };
+    const s = todayRecord.status;
+    if (s === 'ok' || s === 'present') return { label: 'Complet', color: COLORS.success, isIncomplete: false };
+    if (s === 'absent') return { label: 'Absent', color: COLORS.danger, isIncomplete: false };
+    return { label: 'Incomplet', color: '#E8910C', isIncomplete: true };
+  };
+  const ptStatus = getPointageStatus();
+  const entreeTime = todayRecord ? fmtTime(todayRecord.in_time) : '-- : --';
+  const sortieTime = todayRecord ? fmtTime(todayRecord.out_time) : '-- : --';
+  const hasEntree = entreeTime !== '-- : --';
+  const hasSortie = sortieTime !== '-- : --';
+  const workedDuration = todayRecord?.worked_minutes
+    ? minutesToTime(todayRecord.worked_minutes)
+    : (hasEntree && !hasSortie ? 'en cours...' : '--');
+
+  // ── Semaine courante ──
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
+  const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+  const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+  const weekDays = allDays.filter(d => d.date >= weekStartStr && d.date <= weekEndStr);
+
+  // ── Solde de congés ──
+  // Sum "Congés Payés" (CP) primarily, or all balances
+  const cpBalance = balances.find(b =>
+    (b.leave_type_code || '').toUpperCase() === 'CP' ||
+    (b.leave_type_name || '').toLowerCase().includes('congés payés')
   );
 
-  const totalRemaining = balances.reduce((s, b) => s + (b.remaining_days ?? b.remaining ?? 0), 0);
-  const fullName  = employee ? `${employee.prenom} ${employee.nom}` : user?.username || 'Employ\u00e9';
-  const firstName = fullName.split(' ')[0];
-  const initials  = fullName.split(' ').slice(0, 2).map(n => n[0] ?? '').join('').toUpperCase();
+  let remainingDays = 0;
+  let usedDays = 0;
+  let totalDays = 0;
+  if (cpBalance) {
+    remainingDays = Math.round(cpBalance.remaining_days ?? cpBalance.remaining ?? 0);
+    usedDays = Math.round(cpBalance.used_days ?? cpBalance.taken ?? 0);
+    totalDays = Math.round(cpBalance.total_days ?? ((cpBalance.acquired ?? 0) + (cpBalance.adjusted ?? 0)));
+  } else if (balances.length > 0) {
+    remainingDays = Math.round(balances.reduce((s, b) => s + (b.remaining_days ?? b.remaining ?? 0), 0));
+    usedDays = Math.round(balances.reduce((s, b) => s + (b.used_days ?? b.taken ?? 0), 0));
+    totalDays = Math.round(balances.reduce((s, b) => s + (b.total_days ?? (b.acquired ?? 0) + (b.adjusted ?? 0)), 0));
+  }
+  const progressPct = totalDays > 0 ? remainingDays / totalDays : 0;
 
-  const getStatus = () => {
-    if (!todayRecord) return { label: 'Non point\u00e9', color: COLORS.textSecondary, bg: '#F1F5F9', icon: 'remove-circle-outline' as const };
-    const s = todayRecord.status;
-    if (s === 'ok' || s === 'present') return { label: 'Pr\u00e9sent',   color: COLORS.success, bg: '#DCFCE7', icon: 'checkmark-circle' as const };
-    if (s === 'absent')                return { label: 'Absent',    color: COLORS.danger,  bg: '#FEE2E2', icon: 'close-circle'     as const };
-    return                                    { label: 'Incomplet', color: COLORS.warning, bg: '#FEF3C7', icon: 'alert-circle'      as const };
-  };
-  const pt = getStatus();
+  const fullName = employee ? `${employee.prenom} ${employee.nom}` : (user?.employee_name || user?.username || 'Employé');
+  const firstName = employee?.prenom || user?.first_name || fullName.split(' ')[0];
+  const lastName = employee?.nom || user?.last_name || fullName.split(' ').slice(1).join(' ');
+  const initials = getInitials(firstName, lastName);
+  const fonction = employee?.fonction || '';
+  const matricule = employee?.matricule || user?.employee_matricule || '';
+
+  // ── Circular progress SVG ──
+  const circleSize = 70;
+  const strokeWidth = 7;
+  const radius = (circleSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  const strokeDashoffset = circleProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [circumference, circumference * (1 - progressPct)],
+  });
 
   if (empLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
@@ -129,106 +238,182 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Banni\u00e8re ── */}
-        <Animated.View
-          style={[
-            styles.banner,
-            {
-              opacity: bannerAnim,
-              transform: [{
-                translateY: bannerAnim.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }),
-              }],
-            },
-          ]}
-        >
-          <View style={styles.bannerTop}>
-            <Text style={styles.appLabel}>eRH Camusat</Text>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
+        {/* ══════════════════════════════════════════
+            HEADER - Dark navy blue banner
+        ══════════════════════════════════════════ */}
+        <Animated.View style={[styles.header, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
+          {/* Top row: Logo + Avatar */}
+          <View style={styles.headerTopRow}>
+            <View style={styles.logoRow}>
+              <CamusatLogo size={36} showText={false} />
+              <View>
+                <Text style={styles.brandName}>camusat</Text>
+                <Text style={styles.brandSub}>ERH</Text>
+              </View>
+            </View>
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initials}</Text>
+              </View>
+              <View style={styles.onlineDot} />
             </View>
           </View>
-          <Text style={styles.greeting}>Bonjour, {firstName} !</Text>
-          <Text style={styles.date}>{todayLabel}</Text>
-          {employee && (
-            <Text style={styles.fonction}>{employee.fonction} \u2022 {employee.matricule}</Text>
+
+          {/* Greeting */}
+          <Text style={styles.greeting}>Bonjour, {firstName} 👋</Text>
+          <Text style={styles.dateText}>{todayLabel}</Text>
+
+          {/* Badge fonction + matricule */}
+          {(fonction || matricule) && (
+            <View style={styles.fonctionBadge}>
+              <Text style={styles.fonctionText}>
+                {fonction}{fonction && matricule ? ' · ' : ''}{matricule}
+              </Text>
+            </View>
           )}
         </Animated.View>
 
-        {/* ── Pointage du jour ── */}
-        <Animated.View style={{
-          opacity: card1Anim,
-          transform: [{ translateY: card1Anim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }],
-        }}>
-          <TouchableOpacity style={styles.card} activeOpacity={0.78} onPress={() => setShowPtModal(true)}>
-            <View style={styles.cardTop}>
-              <View style={styles.row}>
-                <View style={[styles.iconBox, { backgroundColor: '#EFF6FF' }]}>
-                  <Ionicons name="finger-print-outline" size={18} color={COLORS.primary} />
-                </View>
-                <Text style={styles.cardTitle}>Pointage du jour</Text>
+        {/* ══════════════════════════════════════════
+            POINTAGE DU JOUR
+        ══════════════════════════════════════════ */}
+        <Animated.View style={[styles.card, { opacity: card1Fade, transform: [{ translateY: card1Slide }] }]}>
+          {/* Card header */}
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardTitleRow}>
+              <View style={styles.clockIconWrap}>
+                <Ionicons name="time-outline" size={18} color={COLORS.primary} />
               </View>
-              <View style={[styles.badge, { backgroundColor: pt.bg }]}>
-                <Ionicons name={pt.icon} size={12} color={pt.color} />
-                <Text style={[styles.badgeText, { color: pt.color }]}>{pt.label}</Text>
-              </View>
+              <Text style={styles.cardTitle}>Pointage du jour</Text>
             </View>
+            <View style={[styles.statusPill, { borderColor: ptStatus.color }]}>
+              <View style={[styles.statusDot, { backgroundColor: ptStatus.color }]} />
+              <Text style={[styles.statusPillText, { color: ptStatus.color }]}>{ptStatus.label}</Text>
+            </View>
+          </View>
 
-            <View style={styles.timesRow}>
-              <View style={styles.timeItem}>
-                <Text style={styles.timeLabel}>Entr\u00e9e</Text>
-                <Text style={[styles.timeValue, { color: COLORS.success }]}>
-                  {fmtTime(todayRecord?.in_time)}
-                </Text>
-              </View>
-              <View style={styles.timeSep} />
-              <View style={styles.timeItem}>
-                <Text style={styles.timeLabel}>Sortie</Text>
-                <Text style={[styles.timeValue, { color: todayRecord?.out_time ? COLORS.primary : COLORS.textSecondary }]}>
-                  {fmtTime(todayRecord?.out_time)}
-                </Text>
-              </View>
+          {/* Entrée / Sortie boxes */}
+          <View style={styles.timeBoxRow}>
+            <View style={[styles.timeBox, hasEntree ? styles.timeBoxActive : styles.timeBoxInactive]}>
+              <Text style={[styles.timeBoxLabel, hasEntree && { color: COLORS.success }]}>ENTRÉE</Text>
+              <Text style={[styles.timeBoxValue, hasEntree ? { color: COLORS.success } : { color: COLORS.textSecondary }]}>
+                {entreeTime}
+              </Text>
             </View>
+            <Ionicons name="arrow-forward" size={18} color={COLORS.textSecondary} style={{ marginHorizontal: 8 }} />
+            <View style={[styles.timeBox, hasSortie ? styles.timeBoxActive : styles.timeBoxInactive]}>
+              <Text style={[styles.timeBoxLabel, hasSortie && { color: COLORS.primary }]}>SORTIE</Text>
+              <Text style={[styles.timeBoxValue, hasSortie ? { color: COLORS.primary } : { color: COLORS.textSecondary }]}>
+                {sortieTime}
+              </Text>
+            </View>
+          </View>
 
-            <View style={styles.hintRow}>
-              <Text style={styles.hint}>Appuyez pour voir la semaine</Text>
-              <Ionicons name="chevron-forward" size={12} color={COLORS.textSecondary} />
-            </View>
-          </TouchableOpacity>
+          {/* Footer */}
+          <View style={styles.ptFooterRow}>
+            <Text style={styles.ptDurationText}>Durée travaillée : {workedDuration}</Text>
+            <TouchableOpacity onPress={() => setShowPtModal(true)} style={styles.ptWeekLink}>
+              <Text style={styles.ptWeekLinkText}>Voir la semaine →</Text>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
-        {/* ── Solde de cong\u00e9s ── */}
-        <Animated.View style={{
-          opacity: card2Anim,
-          transform: [{ translateY: card2Anim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }],
-        }}>
-          <View style={styles.card}>
-            <View style={styles.cardTop}>
-              <View style={styles.row}>
-                <View style={[styles.iconBox, { backgroundColor: '#F0FDF4' }]}>
-                  <Ionicons name="calendar-outline" size={18} color="#059669" />
-                </View>
-                <Text style={styles.cardTitle}>Solde de cong\u00e9s</Text>
+        {/* ══════════════════════════════════════════
+            SOLDE DE CONGÉS
+        ══════════════════════════════════════════ */}
+        <Animated.View style={[styles.card, { opacity: card2Fade, transform: [{ translateY: card2Slide }] }]}>
+          {/* Card header */}
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardTitleRow}>
+              <View style={[styles.clockIconWrap, { backgroundColor: '#FEE2E2' }]}>
+                <Ionicons name="calendar" size={18} color={COLORS.danger} />
               </View>
-              <TouchableOpacity onPress={() => navigation.navigate('LeavesTab')}>
-                <Text style={styles.seeMore}>Voir \u2192</Text>
-              </TouchableOpacity>
+              <Text style={styles.cardTitle}>Solde de congés</Text>
             </View>
-            <View style={styles.balanceRow}>
-              <Text style={styles.balanceValue}>{formatDays(totalRemaining)}</Text>
-              <Text style={styles.balanceUnit}> jours disponibles</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('LeavesTab')}>
+              <Text style={styles.voirLink}>Voir →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Circular progress + info */}
+          <View style={styles.congesRow}>
+            {/* Circular indicator */}
+            <View style={styles.circleContainer}>
+              <Svg width={circleSize} height={circleSize}>
+                {/* Background circle */}
+                <SvgCircle
+                  cx={circleSize / 2}
+                  cy={circleSize / 2}
+                  r={radius}
+                  stroke="#E5E7EB"
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                />
+                {/* Progress circle */}
+                <AnimatedSvgCircle
+                  cx={circleSize / 2}
+                  cy={circleSize / 2}
+                  r={radius}
+                  stroke={COLORS.success}
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                  strokeLinecap="round"
+                  strokeDasharray={`${circumference}`}
+                  strokeDashoffset={strokeDashoffset}
+                  rotation="-90"
+                  origin={`${circleSize / 2}, ${circleSize / 2}`}
+                />
+              </Svg>
+              <View style={styles.circleTextWrap}>
+                <Text style={styles.circleValue}>{remainingDays}</Text>
+              </View>
+            </View>
+
+            {/* Right info */}
+            <View style={styles.congesInfo}>
+              <Text style={styles.congesLabel}>jours disponibles</Text>
+              <Text style={styles.congesDetail}>{usedDays} utilisés · {totalDays} total</Text>
+              {/* Progress bar */}
+              <View style={styles.progressBarBg}>
+                <Animated.View style={[styles.progressBarFill, {
+                  width: circleProgress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', `${Math.round(progressPct * 100)}%`],
+                  }),
+                }]} />
+              </View>
             </View>
           </View>
         </Animated.View>
+
+        {/* ══════════════════════════════════════════
+            ALERT BANNER (when incomplete)
+        ══════════════════════════════════════════ */}
+        {ptStatus.isIncomplete && (
+          <Animated.View style={{ opacity: alertFade, transform: [{ translateY: alertSlide }] }}>
+            <TouchableOpacity style={styles.alertBanner} activeOpacity={0.8} onPress={() => setShowPtModal(true)}>
+              <View style={styles.alertIconWrap}>
+                <Ionicons name="notifications" size={20} color={COLORS.danger} />
+              </View>
+              <View style={styles.alertContent}>
+                <Text style={styles.alertTitle}>Pensez à pointer votre sortie</Text>
+                <Text style={styles.alertSubtitle}>Votre journée est incomplète</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.danger} />
+            </TouchableOpacity>
+          </Animated.View>
+        )}
       </ScrollView>
 
-      {/* ── Modal pointage hebdomadaire ── */}
+      {/* ══════════════════════════════════════════
+          MODAL POINTAGE HEBDOMADAIRE
+      ══════════════════════════════════════════ */}
       <Modal visible={showPtModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>Pointage de la semaine</Text>
               <Text style={styles.modalSub}>
-                {format(weekStart, 'd MMM', { locale: fr })} \u2014 {format(weekEnd, 'd MMM yyyy', { locale: fr })}
+                {format(weekStart, 'd MMM', { locale: fr })} — {format(weekEnd, 'd MMM yyyy', { locale: fr })}
               </Text>
             </View>
             <TouchableOpacity onPress={() => setShowPtModal(false)}>
@@ -240,11 +425,18 @@ export default function DashboardScreen() {
             {weekDays.length === 0 ? (
               <View style={styles.empty}>
                 <Ionicons name="time-outline" size={48} color={COLORS.border} />
-                <Text style={styles.emptyText}>Aucune donn\u00e9e cette semaine</Text>
+                <Text style={styles.emptyText}>Aucune donnée cette semaine</Text>
               </View>
             ) : (
               weekDays.map((day, i) => {
-                const cfg = STATUS_CFG[day.status] ?? STATUS_CFG.absent;
+                const statusCfg: Record<string, { label: string; color: string; bg: string }> = {
+                  ok: { label: 'Présent', color: COLORS.success, bg: '#DCFCE7' },
+                  present: { label: 'Présent', color: COLORS.success, bg: '#DCFCE7' },
+                  absent: { label: 'Absent', color: COLORS.danger, bg: '#FEE2E2' },
+                  incomplete: { label: 'Incomplet', color: '#E8910C', bg: '#FEF3C7' },
+                  anomaly: { label: 'Anomalie', color: '#6366F1', bg: '#EEF2FF' },
+                };
+                const cfg = statusCfg[day.status] ?? statusCfg.absent;
                 return (
                   <View key={i} style={styles.dayRow}>
                     <View style={[styles.dayStrip, { backgroundColor: cfg.color }]} />
@@ -257,10 +449,10 @@ export default function DashboardScreen() {
                       </Text>
                     </View>
                     <View style={styles.dayTimesCol}>
-                      <Text style={styles.dayTimeText}>Entr\u00e9e : {fmtTime(day.in_time)}</Text>
+                      <Text style={styles.dayTimeText}>Entrée : {fmtTime(day.in_time)}</Text>
                       <Text style={[styles.dayTimeText, { marginTop: 3 }]}>Sortie : {fmtTime(day.out_time)}</Text>
                       {day.worked_minutes != null && (
-                        <Text style={styles.dayWorked}>{minutesToTime(day.worked_minutes)} travaill\u00e9es</Text>
+                        <Text style={styles.dayWorked}>{minutesToTime(day.worked_minutes)} travaillées</Text>
                       )}
                     </View>
                     <View style={[styles.dayBadge, { backgroundColor: cfg.bg }]}>
@@ -273,71 +465,353 @@ export default function DashboardScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* ══════════════════════════════════════════
+          MODAL DEMANDE DE CONGÉ
+      ══════════════════════════════════════════ */}
+      <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modal}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Nouvelle demande de congé</Text>
+            <TouchableOpacity onPress={() => setShowModal(false)}>
+              <Ionicons name="close" size={24} color={COLORS.text} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+            <Text style={styles.fieldLabel}>Type de congé *</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
+              {leaveTypes.map(lt => (
+                <TouchableOpacity
+                  key={lt.id}
+                  style={[styles.chip, selType === lt.id && styles.chipActive]}
+                  onPress={() => setSelType(lt.id)}
+                >
+                  <Text style={[styles.chipText, selType === lt.id && styles.chipTextActive]}>
+                    {lt.label || lt.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.fieldLabel}>Date de début * (AAAA-MM-JJ)</Text>
+            <TextInput style={styles.input} value={startDate} onChangeText={setStartDate}
+              placeholder="2026-04-01" placeholderTextColor={COLORS.textSecondary} keyboardType="numbers-and-punctuation" />
+
+            <Text style={styles.fieldLabel}>Date de fin * (AAAA-MM-JJ)</Text>
+            <TextInput style={styles.input} value={endDate} onChangeText={setEndDate}
+              placeholder="2026-04-10" placeholderTextColor={COLORS.textSecondary} keyboardType="numbers-and-punctuation" />
+
+            <Text style={styles.fieldLabel}>Motif</Text>
+            <TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+              value={reason} onChangeText={setReason}
+              placeholder="Raison de votre demande..." placeholderTextColor={COLORS.textSecondary}
+              multiline numberOfLines={3} />
+
+            <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
+              onPress={handleSubmit} disabled={submitting}>
+              {submitting
+                ? <ActivityIndicator color={COLORS.white} />
+                : <><Ionicons name="send" size={16} color={COLORS.white} /><Text style={styles.submitBtnText}>Soumettre</Text></>
+              }
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  row:       { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  scroll:    { paddingBottom: 40 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scroll: { paddingBottom: 30 },
 
-  // ── Banni\u00e8re ──
-  banner: {
+  // ── Header ──
+  header: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 28,
-    marginBottom: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
-  bannerTop: {
+  headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 22,
+    marginBottom: 18,
   },
-  appLabel:   { color: 'rgba(255,255,255,0.55)', fontSize: 11, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase' },
-  avatar:     { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.18)', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)' },
-  avatarText: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
-  greeting:   { color: COLORS.white, fontSize: 26, fontWeight: 'bold', marginBottom: 5 },
-  date:       { color: 'rgba(255,255,255,0.78)', fontSize: 13, marginBottom: 6 },
-  fonction:   { color: 'rgba(255,255,255,0.48)', fontSize: 12 },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  brandName: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  brandSub: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 1,
+    marginTop: -2,
+  },
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.danger,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: COLORS.success,
+    borderWidth: 2.5,
+    borderColor: COLORS.primary,
+  },
+  greeting: {
+    color: COLORS.white,
+    fontSize: 26,
+    fontWeight: 'bold',
+  },
+  dateText: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 14,
+    marginTop: 4,
+    textTransform: 'capitalize',
+  },
+  fonctionBadge: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  fonctionText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontWeight: '500',
+  },
 
-  // ── Carte ──
+  // ── Cards ──
   card: {
     backgroundColor: COLORS.white,
-    padding: 18,
     marginHorizontal: 16,
-    marginBottom: 14,
-    borderRadius: 18,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.09,
-    shadowRadius: 10,
-    elevation: 4,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  cardTop:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  cardTitle: { fontSize: 14, fontWeight: '600', color: COLORS.text },
-  iconBox:   { width: 34, height: 34, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  clockIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  voirLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
 
-  badge:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20 },
-  badgeText: { fontSize: 11, fontWeight: '700' },
+  // ── Time boxes ──
+  timeBoxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  timeBox: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  timeBoxActive: {
+    borderColor: COLORS.success,
+    backgroundColor: '#F0FFF4',
+  },
+  timeBoxInactive: {
+    borderColor: COLORS.border,
+    backgroundColor: '#FAFAFA',
+  },
+  timeBoxLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+  },
+  timeBoxValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
 
-  // ── Pointage ──
-  timesRow:  { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
-  timeItem:  { flex: 1, alignItems: 'center' },
-  timeLabel: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 6 },
-  timeValue: { fontSize: 30, fontWeight: 'bold', letterSpacing: 0.5 },
-  timeSep:   { width: 1, height: 42, backgroundColor: COLORS.border },
-  hintRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 2 },
-  hint:      { fontSize: 11, color: COLORS.textSecondary },
+  // ── Pointage footer ──
+  ptFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 12,
+  },
+  ptDurationText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  ptWeekLink: {},
+  ptWeekLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
 
-  // ── Solde ──
-  balanceRow:   { flexDirection: 'row', alignItems: 'baseline' },
-  balanceValue: { fontSize: 38, fontWeight: 'bold', color: '#059669', letterSpacing: -0.5 },
-  balanceUnit:  { fontSize: 15, color: COLORS.textSecondary },
-  seeMore:      { fontSize: 13, fontWeight: '600', color: COLORS.primary },
+  // ── Congés section ──
+  congesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  },
+  circleContainer: {
+    position: 'relative',
+    width: 70,
+    height: 70,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  circleTextWrap: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  circleValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.success,
+  },
+  congesInfo: {
+    flex: 1,
+  },
+  congesLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  congesDetail: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginBottom: 10,
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 6,
+    backgroundColor: COLORS.success,
+    borderRadius: 3,
+  },
+
+  // ── Alert banner ──
+  alertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  alertIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  alertContent: {
+    flex: 1,
+  },
+  alertTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  alertSubtitle: {
+    fontSize: 12,
+    color: COLORS.danger,
+    marginTop: 2,
+  },
 
   // ── Modal ──
   modal: { flex: 1, backgroundColor: COLORS.background },
@@ -345,27 +819,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
     padding: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.white,
   },
-  modalTitle:   { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
-  modalSub:     { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  modalTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
+  modalSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
   modalContent: { padding: 16, paddingBottom: 24 },
 
-  // ── Lignes pointage modal ──
+  // ── Week modal rows ──
   dayRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: COLORS.white, borderRadius: 12, marginBottom: 8,
     overflow: 'hidden',
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1,
   },
-  dayStrip:    { width: 4, alignSelf: 'stretch' },
-  dayDateCol:  { width: 56, padding: 12, alignItems: 'center' },
-  dayWeekday:  { fontSize: 10, color: COLORS.textSecondary },
-  dayNum:      { fontSize: 12, fontWeight: '600', color: COLORS.text, marginTop: 2 },
+  dayStrip: { width: 4, alignSelf: 'stretch' },
+  dayDateCol: { width: 56, padding: 12, alignItems: 'center' },
+  dayWeekday: { fontSize: 10, color: COLORS.textSecondary },
+  dayNum: { fontSize: 12, fontWeight: '600', color: COLORS.text, marginTop: 2 },
   dayTimesCol: { flex: 1, paddingVertical: 12 },
   dayTimeText: { fontSize: 13, fontWeight: '500', color: COLORS.text },
-  dayWorked:   { fontSize: 11, color: COLORS.textSecondary, marginTop: 4 },
-  dayBadge:    { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginRight: 10 },
+  dayWorked: { fontSize: 11, color: COLORS.textSecondary, marginTop: 4 },
+  dayBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginRight: 10 },
   dayBadgeText: { fontSize: 10, fontWeight: '600' },
 
-  empty:     { alignItems: 'center', paddingTop: 60, gap: 12 },
+  empty: { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyText: { color: COLORS.textSecondary, fontSize: 15 },
+
+  // ── Formulaire congé ──
+  fieldLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 6, marginTop: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
+  chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border },
+  chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  chipText: { fontSize: 13, fontWeight: '500', color: COLORS.textSecondary },
+  chipTextActive: { color: COLORS.white },
+  input: { backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 15, color: COLORS.text },
+  submitBtn: {
+    backgroundColor: COLORS.primary, borderRadius: 12, height: 52,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24,
+  },
+  submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
 });

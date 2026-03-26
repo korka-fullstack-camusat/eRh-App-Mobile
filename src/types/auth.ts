@@ -16,4 +16,8 @@ export interface UserProfile {
   last_name?: string;
   role?: string;
   first_login?: boolean;
+  employee_id?: number;
+  employee_matricule?: string;
+  employee_name?: string;
+  roles?: string[];
 }
