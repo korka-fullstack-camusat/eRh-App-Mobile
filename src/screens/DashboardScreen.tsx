@@ -1,18 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl,
-  TouchableOpacity, ActivityIndicator, Modal, TextInput, Alert,
+  TouchableOpacity, ActivityIndicator, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployee } from '@/contexts/EmployeeContext';
-import {
-  getMyLeaveBalances, getLeaveTypes, createLeaveRequest,
-} from '@/services/leaveService';
+import { getMyLeaveBalances } from '@/services/leaveService';
 import { getMyAttendance } from '@/services/attendanceService';
-import type { LeaveBalance, LeaveType } from '@/types/leave';
+import type { LeaveBalance } from '@/types/leave';
 import type { EmployeePeriodDetailDay } from '@/types/attendance';
 import { COLORS } from '@/theme';
 import {
@@ -49,18 +47,10 @@ export default function DashboardScreen() {
   const { employee, isLoading: empLoading } = useEmployee();
   const navigation = useNavigation<any>();
 
-  const [balances, setBalances]   = useState<LeaveBalance[]>([]);
-  const [allDays, setAllDays]     = useState<EmployeePeriodDetailDay[]>([]);
-  const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
+  const [balances, setBalances] = useState<LeaveBalance[]>([]);
+  const [allDays, setAllDays]   = useState<EmployeePeriodDetailDay[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-
   const [showPtModal, setShowPtModal] = useState(false);
-  const [showModal, setShowModal]     = useState(false);
-  const [selType, setSelType]         = useState<number | null>(null);
-  const [startDate, setStartDate]     = useState('');
-  const [endDate, setEndDate]         = useState('');
-  const [reason, setReason]           = useState('');
-  const [submitting, setSubmitting]   = useState(false);
 
   const today    = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
@@ -71,15 +61,13 @@ export default function DashboardScreen() {
     const start = format(startOfMonth(today), 'yyyy-MM-dd');
     const end   = format(endOfMonth(today),   'yyyy-MM-dd');
 
-    const [bal, att, types] = await Promise.allSettled([
+    const [bal, att] = await Promise.allSettled([
       getMyLeaveBalances(employee.id),
       getMyAttendance({ employee_id: employee.id, start, end }),
-      getLeaveTypes(),
     ]);
 
-    if (bal.status   === 'fulfilled') setBalances(bal.value);
-    if (att.status   === 'fulfilled') setAllDays(att.value.days ?? []);
-    if (types.status === 'fulfilled') setLeaveTypes(types.value);
+    if (bal.status === 'fulfilled') setBalances(bal.value);
+    if (att.status === 'fulfilled') setAllDays(att.value.days ?? []);
   }, [employee]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -89,32 +77,6 @@ export default function DashboardScreen() {
     await loadData();
     setRefreshing(false);
   }, [loadData]);
-
-  const handleSubmit = async () => {
-    if (!employee || !selType || !startDate || !endDate) {
-      Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires.');
-      return;
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
-      Alert.alert('Erreur', 'Format invalide. Utilisez AAAA-MM-JJ.');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await createLeaveRequest({
-        employee: employee.id, leave_type: selType,
-        start_date: startDate, end_date: endDate, reason,
-      });
-      setShowModal(false);
-      setSelType(null); setStartDate(''); setEndDate(''); setReason('');
-      await loadData();
-      Alert.alert('Succès', 'Demande soumise avec succès.');
-    } catch (e: any) {
-      Alert.alert('Erreur', e?.response?.data?.detail || 'Erreur lors de la soumission.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   const todayRecord = allDays.find(d => d.date === todayStr) ?? null;
 
@@ -202,39 +164,9 @@ export default function DashboardScreen() {
             <Text style={styles.balanceLabel}> jours disponibles</Text>
           </View>
         </View>
-
-        {/* ── Accès rapides ── */}
-        <Text style={styles.sectionTitle}>Accès rapides</Text>
-        <View style={styles.grid}>
-          <TouchableOpacity style={styles.gridItem} onPress={() => setShowModal(true)}>
-            <View style={[styles.gridIcon, { backgroundColor: '#EFF6FF' }]}>
-              <Ionicons name="add-circle" size={26} color={COLORS.primary} />
-            </View>
-            <Text style={styles.gridLabel}>Demande</Text>
-            <Text style={styles.gridSub}>de congé</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.gridItem} onPress={() => navigation.navigate('PayslipsTab')}>
-            <View style={[styles.gridIcon, { backgroundColor: '#F0FDF4' }]}>
-              <Ionicons name="document-text" size={26} color="#059669" />
-            </View>
-            <Text style={styles.gridLabel}>Bulletins</Text>
-            <Text style={styles.gridSub}>de paie</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.gridItem} onPress={() => navigation.navigate('ProfileTab')}>
-            <View style={[styles.gridIcon, { backgroundColor: '#FFF7ED' }]}>
-              <Ionicons name="person" size={26} color="#EA580C" />
-            </View>
-            <Text style={styles.gridLabel}>Mon profil</Text>
-            <Text style={styles.gridSub} numberOfLines={1}>{firstName}</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
 
-      {/* ════════════════════════════════════
-          MODAL POINTAGE HEBDOMADAIRE
-      ════════════════════════════════════ */}
+      {/* ── Modal pointage hebdomadaire ── */}
       <Modal visible={showPtModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
@@ -283,68 +215,6 @@ export default function DashboardScreen() {
                 );
               })
             )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
-
-      {/* ════════════════════════════════════
-          MODAL DEMANDE DE CONGÉ
-      ════════════════════════════════════ */}
-      <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Nouvelle demande de congé</Text>
-            <TouchableOpacity onPress={() => setShowModal(false)}>
-              <Ionicons name="close" size={24} color={COLORS.text} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-            <Text style={styles.fieldLabel}>Type de congé *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 4 }}>
-              {leaveTypes.map(lt => (
-                <TouchableOpacity
-                  key={lt.id}
-                  style={[styles.chip, selType === lt.id && styles.chipActive]}
-                  onPress={() => setSelType(lt.id)}
-                >
-                  <Text style={[styles.chipText, selType === lt.id && styles.chipTextActive]}>
-                    {lt.label || lt.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <Text style={styles.fieldLabel}>Date de début * (AAAA-MM-JJ)</Text>
-            <TextInput
-              style={styles.input} value={startDate} onChangeText={setStartDate}
-              placeholder="2026-04-01" placeholderTextColor={COLORS.textSecondary}
-              keyboardType="numbers-and-punctuation"
-            />
-
-            <Text style={styles.fieldLabel}>Date de fin * (AAAA-MM-JJ)</Text>
-            <TextInput
-              style={styles.input} value={endDate} onChangeText={setEndDate}
-              placeholder="2026-04-10" placeholderTextColor={COLORS.textSecondary}
-              keyboardType="numbers-and-punctuation"
-            />
-
-            <Text style={styles.fieldLabel}>Motif</Text>
-            <TextInput
-              style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-              value={reason} onChangeText={setReason}
-              placeholder="Raison de votre demande..." placeholderTextColor={COLORS.textSecondary}
-              multiline numberOfLines={3}
-            />
-
-            <TouchableOpacity
-              style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
-              onPress={handleSubmit} disabled={submitting}
-            >
-              {submitting
-                ? <ActivityIndicator color={COLORS.white} />
-                : <><Ionicons name="send" size={16} color={COLORS.white} /><Text style={styles.submitBtnText}>Soumettre</Text></>
-              }
-            </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -399,23 +269,6 @@ const styles = StyleSheet.create({
   balanceLabel: { fontSize: 14, color: COLORS.textSecondary },
   seeMore:      { fontSize: 13, fontWeight: '600', color: COLORS.primary },
 
-  // ── Accès rapides ──
-  sectionTitle: {
-    fontSize: 11, fontWeight: '700', color: COLORS.textSecondary,
-    paddingHorizontal: 16, marginBottom: 10,
-    textTransform: 'uppercase', letterSpacing: 0.5,
-  },
-  grid:     { flexDirection: 'row', paddingHorizontal: 16, gap: 10 },
-  gridItem: {
-    flex: 1, backgroundColor: COLORS.white, borderRadius: 12, padding: 14,
-    alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 3, elevation: 2,
-  },
-  gridIcon:  { width: 50, height: 50, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  gridLabel: { fontSize: 13, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
-  gridSub:   { fontSize: 11, color: COLORS.textSecondary, textAlign: 'center', marginTop: 2 },
-
   // ── Modal ──
   modal: { flex: 1, backgroundColor: COLORS.background },
   modalHeader: {
@@ -445,17 +298,4 @@ const styles = StyleSheet.create({
 
   empty:     { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyText: { color: COLORS.textSecondary, fontSize: 15 },
-
-  // ── Formulaire congé ──
-  fieldLabel:     { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 6, marginTop: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
-  chip:           { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border },
-  chipActive:     { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  chipText:       { fontSize: 13, fontWeight: '500', color: COLORS.textSecondary },
-  chipTextActive: { color: COLORS.white },
-  input:          { backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 15, color: COLORS.text },
-  submitBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 12, height: 52,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24,
-  },
-  submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
 });
