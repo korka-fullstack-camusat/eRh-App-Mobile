@@ -1,10 +1,8 @@
 import React from 'react';
-import { View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/theme';
-import CamusatLogo from '@/components/CamusatLogo';
 
 import DashboardScreen from '@/screens/DashboardScreen';
 import LeavesScreen from '@/screens/leaves/LeavesScreen';
@@ -26,14 +24,6 @@ export type ProfileStackParamList = {
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
-
-function HeaderLogo() {
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <CamusatLogo size={30} showText={true} textColor={COLORS.white} />
-    </View>
-  );
-}
 
 function ProfileStackNavigator() {
   return (
@@ -81,7 +71,7 @@ export default function MainNavigator() {
       <Tab.Screen
         name="DashboardTab"
         component={DashboardScreen}
-        options={{ title: 'Accueil', headerTitle: () => <HeaderLogo />, headerTitleAlign: 'center' }}
+        options={{ title: 'Accueil', headerShown: false }}
       />
       <Tab.Screen
         name="LeavesTab"

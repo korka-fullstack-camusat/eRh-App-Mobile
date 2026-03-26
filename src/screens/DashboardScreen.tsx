@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl,
   TouchableOpacity, ActivityIndicator, Modal, TextInput,
-  Alert, Animated, useWindowDimensions,
+  Alert, Animated, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,16 +17,18 @@ import { getMyAttendance } from '@/services/attendanceService';
 import type { LeaveBalance, LeaveRequest, LeaveType } from '@/types/leave';
 import type { EmployeePeriodDetailDay } from '@/types/attendance';
 import { COLORS } from '@/theme';
+import CamusatLogo from '@/components/CamusatLogo';
 import {
-  format, startOfMonth, endOfMonth, subMonths,
-  getDate, startOfWeek, endOfWeek,
+  format, startOfMonth, endOfMonth,
+  startOfWeek, endOfWeek,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
+
+const AnimatedSvgCircle = Animated.createAnimatedComponent(SvgCircle);
 
 function fmtTime(val?: string | null): string {
-  if (!val) return '--:--';
+  if (!val) return '-- : --';
   const iso = val.match(/T(\d{2}):(\d{2})/);
   if (iso) return `${iso[1]}:${iso[2]}`;
   const hms = val.match(/^(\d{2}):(\d{2})/);
@@ -35,60 +37,79 @@ function fmtTime(val?: string | null): string {
 }
 
 function minutesToTime(min?: number | null): string {
-  if (!min && min !== 0) return '--';
+  if (!min && min !== 0) return 'en cours...';
   const h = Math.floor(Math.abs(min) / 60);
   const m = Math.abs(min) % 60;
   return `${h}h${m > 0 ? String(m).padStart(2, '0') : ''}`;
 }
 
-const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
-  ok:         { label: 'Présent',   color: COLORS.success,  bg: '#DCFCE7' },
-  present:    { label: 'Présent',   color: COLORS.success,  bg: '#DCFCE7' },
-  absent:     { label: 'Absent',    color: COLORS.danger,   bg: '#FEE2E2' },
-  incomplete: { label: 'Incomplet', color: COLORS.warning,  bg: '#FEF3C7' },
-  anomaly:    { label: 'Anomalie',  color: '#6366F1',       bg: '#EEF2FF' },
-};
+function getInitials(firstName?: string, lastName?: string): string {
+  const f = (firstName || '').charAt(0).toUpperCase();
+  const l = (lastName || '').charAt(0).toUpperCase();
+  return `${f}${l}` || '??';
+}
 
 export default function DashboardScreen() {
   const { user } = useAuth();
   const { employee, isLoading: empLoading } = useEmployee();
   const navigation = useNavigation<any>();
-  const { width } = useWindowDimensions();
 
-  const [balances, setBalances]   = useState<LeaveBalance[]>([]);
-  const [allDays, setAllDays]     = useState<EmployeePeriodDetailDay[]>([]);
+  const [balances, setBalances] = useState<LeaveBalance[]>([]);
+  const [allDays, setAllDays] = useState<EmployeePeriodDetailDay[]>([]);
   const [allLeaves, setAllLeaves] = useState<LeaveRequest[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Modal states
   const [showPtModal, setShowPtModal] = useState(false);
-  const [ptExporting, setPtExporting] = useState(false);
-
   const [showModal, setShowModal] = useState(false);
-  const [selType, setSelType]     = useState<number | null>(null);
+  const [selType, setSelType] = useState<number | null>(null);
   const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate]     = useState('');
-  const [reason, setReason]       = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(18)).current;
+  // Animations
+  const headerFade = useRef(new Animated.Value(0)).current;
+  const headerSlide = useRef(new Animated.Value(-30)).current;
+  const card1Fade = useRef(new Animated.Value(0)).current;
+  const card1Slide = useRef(new Animated.Value(40)).current;
+  const card2Fade = useRef(new Animated.Value(0)).current;
+  const card2Slide = useRef(new Animated.Value(40)).current;
+  const alertFade = useRef(new Animated.Value(0)).current;
+  const alertSlide = useRef(new Animated.Value(40)).current;
+  const circleProgress = useRef(new Animated.Value(0)).current;
 
-  const today    = new Date();
+  const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
   const todayLabel = format(today, 'EEEE d MMMM yyyy', { locale: fr });
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 1, duration: 480, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 480, useNativeDriver: true }),
+    // Staggered entrance animations
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(headerFade, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.spring(headerSlide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(card1Fade, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(card1Slide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(card2Fade, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(card2Slide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(alertFade, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(alertSlide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
+      ]),
     ]).start();
   }, []);
 
   const loadData = useCallback(async () => {
     if (!employee) return;
     const start = format(startOfMonth(today), 'yyyy-MM-dd');
-    const end   = format(endOfMonth(today),   'yyyy-MM-dd');
+    const end = format(endOfMonth(today), 'yyyy-MM-dd');
 
     const [bal, att, reqs, types] = await Promise.allSettled([
       getMyLeaveBalances(employee.id),
@@ -97,13 +118,18 @@ export default function DashboardScreen() {
       getLeaveTypes(),
     ]);
 
-    if (bal.status   === 'fulfilled') setBalances(bal.value);
-    if (att.status   === 'fulfilled') setAllDays(att.value.days ?? []);
-    if (reqs.status  === 'fulfilled') setAllLeaves(reqs.value);
+    if (bal.status === 'fulfilled') setBalances(bal.value);
+    if (att.status === 'fulfilled') setAllDays(att.value.days ?? []);
+    if (reqs.status === 'fulfilled') setAllLeaves(reqs.value);
     if (types.status === 'fulfilled') setLeaveTypes(types.value);
   }, [employee]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Animate circle when balances change
+  useEffect(() => {
+    Animated.timing(circleProgress, { toValue: 1, duration: 1000, useNativeDriver: false }).start();
+  }, [balances]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -137,240 +163,250 @@ export default function DashboardScreen() {
     }
   };
 
-  // ── Pointage ──────────────────────────────────────────────────────────────
+  // ── Pointage ──
   const todayRecord = allDays.find(d => d.date === todayStr) ?? null;
-  const getPt = () => {
-    if (!todayRecord) return { label: 'Aucun pointage', color: COLORS.textSecondary, bg: COLORS.border, icon: 'remove-circle-outline' as const, entree: '--:--', sortie: '--:--' };
+  const getPointageStatus = () => {
+    if (!todayRecord) return { label: 'Aucun pointage', color: COLORS.textSecondary, isIncomplete: false };
     const s = todayRecord.status;
-    const entree = fmtTime(todayRecord.in_time);
-    const sortie = fmtTime(todayRecord.out_time);
-    if (s === 'ok' || s === 'present') return { label: 'Présent', color: COLORS.success, bg: '#DCFCE7', icon: 'checkmark-circle' as const, entree, sortie };
-    if (s === 'absent')                return { label: 'Absent',  color: COLORS.danger,  bg: '#FEE2E2', icon: 'close-circle' as const, entree, sortie };
-    return { label: 'Incomplet', color: COLORS.warning, bg: '#FEF3C7', icon: 'alert-circle' as const, entree, sortie };
+    if (s === 'ok' || s === 'present') return { label: 'Complet', color: COLORS.success, isIncomplete: false };
+    if (s === 'absent') return { label: 'Absent', color: COLORS.danger, isIncomplete: false };
+    return { label: 'Incomplet', color: '#E8910C', isIncomplete: true };
   };
-  const pt = getPt();
+  const ptStatus = getPointageStatus();
+  const entreeTime = todayRecord ? fmtTime(todayRecord.in_time) : '-- : --';
+  const sortieTime = todayRecord ? fmtTime(todayRecord.out_time) : '-- : --';
+  const hasEntree = entreeTime !== '-- : --';
+  const hasSortie = sortieTime !== '-- : --';
+  const workedDuration = todayRecord?.worked_minutes
+    ? minutesToTime(todayRecord.worked_minutes)
+    : (hasEntree && !hasSortie ? 'en cours...' : '--');
 
-  // ── Semaine courante ──────────────────────────────────────────────────────
-  const weekStart    = startOfWeek(today, { weekStartsOn: 1 });
-  const weekEnd      = endOfWeek(today,   { weekStartsOn: 1 });
+  // ── Semaine courante ──
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
-  const weekEndStr   = format(weekEnd,   'yyyy-MM-dd');
-  const weekDays     = allDays.filter(d => d.date >= weekStartStr && d.date <= weekEndStr);
+  const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+  const weekDays = allDays.filter(d => d.date >= weekStartStr && d.date <= weekEndStr);
 
-  // ── Soldes ────────────────────────────────────────────────────────────────
-  const totalRemaining = balances.reduce((s, b) => s + (b.remaining_days ?? b.remaining ?? 0), 0);
+  // ── Solde de congés ──
+  // Sum "Congés Payés" (CP) primarily, or all balances
+  const cpBalance = balances.find(b =>
+    (b.leave_type_code || '').toUpperCase() === 'CP' ||
+    (b.leave_type_name || '').toLowerCase().includes('congés payés')
+  );
 
-  const threeMonthsAgo = format(startOfMonth(subMonths(today, 2)), 'yyyy-MM-dd');
-  const monthEndStr    = format(endOfMonth(today), 'yyyy-MM-dd');
-  const takenLast3 = allLeaves
-    .filter(l => (l.status === 'APPROVED' || l.status === 'approved') && l.start_date <= monthEndStr && l.end_date >= threeMonthsAgo)
-    .reduce((sum, l) => sum + (l.duration_days ?? 0), 0);
+  let remainingDays = 0;
+  let usedDays = 0;
+  let totalDays = 0;
+  if (cpBalance) {
+    remainingDays = Math.round(cpBalance.remaining_days ?? cpBalance.remaining ?? 0);
+    usedDays = Math.round(cpBalance.used_days ?? cpBalance.taken ?? 0);
+    totalDays = Math.round(cpBalance.total_days ?? ((cpBalance.acquired ?? 0) + (cpBalance.adjusted ?? 0)));
+  } else if (balances.length > 0) {
+    remainingDays = Math.round(balances.reduce((s, b) => s + (b.remaining_days ?? b.remaining ?? 0), 0));
+    usedDays = Math.round(balances.reduce((s, b) => s + (b.used_days ?? b.taken ?? 0), 0));
+    totalDays = Math.round(balances.reduce((s, b) => s + (b.total_days ?? (b.acquired ?? 0) + (b.adjusted ?? 0)), 0));
+  }
+  const progressPct = totalDays > 0 ? remainingDays / totalDays : 0;
 
-  const isStartOfMonth = getDate(today) <= 7;
-  const fullName  = employee ? `${employee.prenom} ${employee.nom}` : user?.username || 'Employé';
-  const firstName = fullName.split(' ')[0];
+  const fullName = employee ? `${employee.prenom} ${employee.nom}` : (user?.employee_name || user?.username || 'Employé');
+  const firstName = employee?.prenom || user?.first_name || fullName.split(' ')[0];
+  const lastName = employee?.nom || user?.last_name || fullName.split(' ').slice(1).join(' ');
+  const initials = getInitials(firstName, lastName);
+  const fonction = employee?.fonction || '';
+  const matricule = employee?.matricule || user?.employee_matricule || '';
 
-  // ── Export PDF pointage semaine ──────────────────────────────────────────
-  const handleExportWeekPDF = async () => {
-    if (weekDays.length === 0) { Alert.alert('Export', 'Aucune donnée cette semaine.'); return; }
-    setPtExporting(true);
-    try {
-      const employeeName = employee ? `${employee.prenom} ${employee.nom}` : '';
-      const rows = weekDays.map(d => {
-        const cfg = STATUS_CFG[d.status] ?? STATUS_CFG.absent;
-        return `<tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${format(new Date(d.date), 'EEE d MMM', { locale: fr })}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;"><span style="background:${cfg.bg};color:${cfg.color};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${cfg.label}</span></td>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${fmtTime(d.in_time)}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${fmtTime(d.out_time)}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${minutesToTime(d.worked_minutes)}</td>
-        </tr>`;
-      }).join('');
+  // ── Circular progress SVG ──
+  const circleSize = 70;
+  const strokeWidth = 7;
+  const radius = (circleSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
 
-      const html = `<html><head><meta charset="utf-8"/><style>
-        body{font-family:-apple-system,sans-serif;margin:0;padding:20px;color:#1A1A2E;}
-        .header{background:#003C71;color:white;padding:18px 20px;border-radius:8px;margin-bottom:20px;}
-        .header h1{margin:0;font-size:18px;} .header p{margin:4px 0 0;opacity:.8;font-size:12px;}
-        table{width:100%;border-collapse:collapse;font-size:13px;}
-        th{background:#F5F7FA;padding:10px 12px;text-align:left;font-weight:600;color:#6C757D;font-size:11px;text-transform:uppercase;letter-spacing:.4px;}
-        .footer{margin-top:18px;text-align:center;color:#999;font-size:10px;border-top:1px solid #eee;padding-top:10px;}
-      </style></head><body>
-        <div class="header">
-          <h1>Pointage hebdomadaire — CAMUSAT</h1>
-          <p>${employeeName} • ${employee?.matricule ?? ''} • Semaine du ${format(weekStart, 'd MMM', { locale: fr })} au ${format(weekEnd, 'd MMM yyyy', { locale: fr })}</p>
-        </div>
-        <table><thead><tr><th>Jour</th><th>Statut</th><th>Entrée</th><th>Sortie</th><th>Durée</th></tr></thead>
-        <tbody>${rows}</tbody></table>
-        <div class="footer">Document confidentiel — CAMUSAT eRH — ${format(new Date(), 'd MMMM yyyy', { locale: fr })}</div>
-      </body></html>`;
-
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
-    } catch {
-      Alert.alert('Erreur', 'Impossible de générer le PDF.');
-    } finally {
-      setPtExporting(false);
-    }
-  };
+  const strokeDashoffset = circleProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [circumference, circumference * (1 - progressPct)],
+  });
 
   if (empLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Bannière — greeting seulement, pas de logo ── */}
-        <Animated.View style={[styles.banner, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-          <Text style={styles.greeting}>Bonjour, {firstName} !</Text>
-          <Text style={styles.date}>{todayLabel}</Text>
-          {employee && (
-            <Text style={styles.fonction}>{employee.fonction} • {employee.matricule}</Text>
+        {/* ══════════════════════════════════════════
+            HEADER - Dark navy blue banner
+        ══════════════════════════════════════════ */}
+        <Animated.View style={[styles.header, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
+          {/* Top row: Logo + Avatar */}
+          <View style={styles.headerTopRow}>
+            <View style={styles.logoRow}>
+              <CamusatLogo size={36} showText={false} />
+              <View>
+                <Text style={styles.brandName}>camusat</Text>
+                <Text style={styles.brandSub}>ERH</Text>
+              </View>
+            </View>
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{initials}</Text>
+              </View>
+              <View style={styles.onlineDot} />
+            </View>
+          </View>
+
+          {/* Greeting */}
+          <Text style={styles.greeting}>Bonjour, {firstName} 👋</Text>
+          <Text style={styles.dateText}>{todayLabel}</Text>
+
+          {/* Badge fonction + matricule */}
+          {(fonction || matricule) && (
+            <View style={styles.fonctionBadge}>
+              <Text style={styles.fonctionText}>
+                {fonction}{fonction && matricule ? ' · ' : ''}{matricule}
+              </Text>
+            </View>
           )}
         </Animated.View>
 
-        {/* ── Pointage du jour ── */}
-        <TouchableOpacity style={styles.card} activeOpacity={0.75} onPress={() => setShowPtModal(true)}>
-          <View style={styles.cardHeader}>
-            <View style={styles.row}>
-              <Ionicons name="finger-print-outline" size={17} color={COLORS.primary} />
+        {/* ══════════════════════════════════════════
+            POINTAGE DU JOUR
+        ══════════════════════════════════════════ */}
+        <Animated.View style={[styles.card, { opacity: card1Fade, transform: [{ translateY: card1Slide }] }]}>
+          {/* Card header */}
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardTitleRow}>
+              <View style={styles.clockIconWrap}>
+                <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+              </View>
               <Text style={styles.cardTitle}>Pointage du jour</Text>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: pt.bg }]}>
-              <Ionicons name={pt.icon} size={13} color={pt.color} />
-              <Text style={[styles.statusText, { color: pt.color }]}>{pt.label}</Text>
+            <View style={[styles.statusPill, { borderColor: ptStatus.color }]}>
+              <View style={[styles.statusDot, { backgroundColor: ptStatus.color }]} />
+              <Text style={[styles.statusPillText, { color: ptStatus.color }]}>{ptStatus.label}</Text>
             </View>
           </View>
 
-          {/* Entrée / Sortie en colonne */}
-          <View style={styles.ptBlock}>
-            <View style={styles.ptRow}>
-              <View style={[styles.ptIconWrap, { backgroundColor: '#DCFCE7' }]}>
-                <Ionicons name="log-in-outline" size={16} color={COLORS.success} />
-              </View>
-              <Text style={styles.ptLabel}>Entrée</Text>
-              <Text style={[styles.ptValue, { color: pt.entree !== '--:--' ? COLORS.success : COLORS.textSecondary }]}>
-                {pt.entree}
+          {/* Entrée / Sortie boxes */}
+          <View style={styles.timeBoxRow}>
+            <View style={[styles.timeBox, hasEntree ? styles.timeBoxActive : styles.timeBoxInactive]}>
+              <Text style={[styles.timeBoxLabel, hasEntree && { color: COLORS.success }]}>ENTRÉE</Text>
+              <Text style={[styles.timeBoxValue, hasEntree ? { color: COLORS.success } : { color: COLORS.textSecondary }]}>
+                {entreeTime}
               </Text>
             </View>
-            <View style={styles.ptDivider} />
-            <View style={styles.ptRow}>
-              <View style={[styles.ptIconWrap, { backgroundColor: '#DBEAFE' }]}>
-                <Ionicons name="log-out-outline" size={16} color={COLORS.primary} />
-              </View>
-              <Text style={styles.ptLabel}>Sortie</Text>
-              <Text style={[styles.ptValue, { color: pt.sortie !== '--:--' ? COLORS.primary : COLORS.textSecondary }]}>
-                {pt.sortie}
+            <Ionicons name="arrow-forward" size={18} color={COLORS.textSecondary} style={{ marginHorizontal: 8 }} />
+            <View style={[styles.timeBox, hasSortie ? styles.timeBoxActive : styles.timeBoxInactive]}>
+              <Text style={[styles.timeBoxLabel, hasSortie && { color: COLORS.primary }]}>SORTIE</Text>
+              <Text style={[styles.timeBoxValue, hasSortie ? { color: COLORS.primary } : { color: COLORS.textSecondary }]}>
+                {sortieTime}
               </Text>
             </View>
           </View>
 
-          <View style={styles.ptFooter}>
-            <Text style={styles.ptHintText}>Appuyez pour voir la semaine</Text>
-            <Ionicons name="chevron-forward" size={14} color={COLORS.textSecondary} />
+          {/* Footer */}
+          <View style={styles.ptFooterRow}>
+            <Text style={styles.ptDurationText}>Durée travaillée : {workedDuration}</Text>
+            <TouchableOpacity onPress={() => setShowPtModal(true)} style={styles.ptWeekLink}>
+              <Text style={styles.ptWeekLinkText}>Voir la semaine →</Text>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </Animated.View>
 
-        {/* ── Notif début de mois ── */}
-        {isStartOfMonth && (
-          <View style={styles.notifCard}>
-            <Ionicons name="gift-outline" size={18} color="#059669" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.notifTitle}>Solde mis à jour</Text>
-              <Text style={styles.notifSub}>+2 jours de congé crédités ce mois</Text>
+        {/* ══════════════════════════════════════════
+            SOLDE DE CONGÉS
+        ══════════════════════════════════════════ */}
+        <Animated.View style={[styles.card, { opacity: card2Fade, transform: [{ translateY: card2Slide }] }]}>
+          {/* Card header */}
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardTitleRow}>
+              <View style={[styles.clockIconWrap, { backgroundColor: '#FEE2E2' }]}>
+                <Ionicons name="calendar" size={18} color={COLORS.danger} />
+              </View>
+              <Text style={styles.cardTitle}>Solde de congés</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('LeavesTab')}>
+              <Text style={styles.voirLink}>Voir →</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Circular progress + info */}
+          <View style={styles.congesRow}>
+            {/* Circular indicator */}
+            <View style={styles.circleContainer}>
+              <Svg width={circleSize} height={circleSize}>
+                {/* Background circle */}
+                <SvgCircle
+                  cx={circleSize / 2}
+                  cy={circleSize / 2}
+                  r={radius}
+                  stroke="#E5E7EB"
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                />
+                {/* Progress circle */}
+                <AnimatedSvgCircle
+                  cx={circleSize / 2}
+                  cy={circleSize / 2}
+                  r={radius}
+                  stroke={COLORS.success}
+                  strokeWidth={strokeWidth}
+                  fill="transparent"
+                  strokeLinecap="round"
+                  strokeDasharray={`${circumference}`}
+                  strokeDashoffset={strokeDashoffset}
+                  rotation="-90"
+                  origin={`${circleSize / 2}, ${circleSize / 2}`}
+                />
+              </Svg>
+              <View style={styles.circleTextWrap}>
+                <Text style={styles.circleValue}>{remainingDays}</Text>
+              </View>
+            </View>
+
+            {/* Right info */}
+            <View style={styles.congesInfo}>
+              <Text style={styles.congesLabel}>jours disponibles</Text>
+              <Text style={styles.congesDetail}>{usedDays} utilisés · {totalDays} total</Text>
+              {/* Progress bar */}
+              <View style={styles.progressBarBg}>
+                <Animated.View style={[styles.progressBarFill, {
+                  width: circleProgress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', `${Math.round(progressPct * 100)}%`],
+                  }),
+                }]} />
+              </View>
             </View>
           </View>
+        </Animated.View>
+
+        {/* ══════════════════════════════════════════
+            ALERT BANNER (when incomplete)
+        ══════════════════════════════════════════ */}
+        {ptStatus.isIncomplete && (
+          <Animated.View style={{ opacity: alertFade, transform: [{ translateY: alertSlide }] }}>
+            <TouchableOpacity style={styles.alertBanner} activeOpacity={0.8} onPress={() => setShowPtModal(true)}>
+              <View style={styles.alertIconWrap}>
+                <Ionicons name="notifications" size={20} color={COLORS.danger} />
+              </View>
+              <View style={styles.alertContent}>
+                <Text style={styles.alertTitle}>Pensez à pointer votre sortie</Text>
+                <Text style={styles.alertSubtitle}>Votre journée est incomplète</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={COLORS.danger} />
+            </TouchableOpacity>
+          </Animated.View>
         )}
-
-        {/* ── Mes congés ── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Mes congés</Text>
-          <TouchableOpacity style={styles.requestBtn} onPress={() => setShowModal(true)}>
-            <Ionicons name="add" size={16} color={COLORS.white} />
-            <Text style={styles.requestBtnText}>Demander</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.soldesRow}>
-          {/* Solde actuel → Congés */}
-          <TouchableOpacity
-            style={[styles.soldeCard, styles.soldePrimary]}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('LeavesTab')}
-          >
-            <Ionicons name="calendar-outline" size={20} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.soldeValueBig}>{totalRemaining}</Text>
-            <Text style={styles.soldeLabelLight}>jours restants</Text>
-            <View style={styles.soldeLinkRow}>
-              <Text style={styles.soldeLink}>Voir le détail</Text>
-              <Ionicons name="chevron-forward" size={11} color="rgba(255,255,255,0.7)" />
-            </View>
-          </TouchableOpacity>
-
-          {/* Pris 3 mois */}
-          <View style={[styles.soldeCard, styles.soldeSecondary]}>
-            <Ionicons name="time-outline" size={20} color={COLORS.textSecondary} />
-            <Text style={[styles.soldeValueBig, { color: COLORS.text }]}>{takenLast3}</Text>
-            <Text style={styles.soldeLabelDark}>jours pris</Text>
-            <Text style={[styles.soldeLabelDark, { fontSize: 10, marginTop: 2 }]}>3 derniers mois</Text>
-          </View>
-        </View>
-
-        {/* ── Accès rapides ── */}
-        <Text style={styles.subTitle}>Accès rapides</Text>
-
-        <View style={styles.hubGrid}>
-          {/* Congés → LeavesTab */}
-          <TouchableOpacity
-            style={styles.hubCard}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('LeavesTab')}
-          >
-            <View style={[styles.hubIconWrap, { backgroundColor: '#EFF6FF' }]}>
-              <Ionicons name="calendar" size={22} color={COLORS.primary} />
-            </View>
-            <Text style={styles.hubTitle}>Congés</Text>
-            <Text style={styles.hubSub}>Historique & demandes</Text>
-            <Text style={styles.hubLink}>Accéder →</Text>
-          </TouchableOpacity>
-
-          {/* Bulletins → PayslipsTab */}
-          <TouchableOpacity
-            style={styles.hubCard}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('PayslipsTab')}
-          >
-            <View style={[styles.hubIconWrap, { backgroundColor: '#F0FDF4' }]}>
-              <Ionicons name="document-text" size={22} color="#059669" />
-            </View>
-            <Text style={styles.hubTitle}>Bulletins</Text>
-            <Text style={styles.hubSub}>Mes bulletins de paie</Text>
-            <Text style={[styles.hubLink, { color: '#059669' }]}>Accéder →</Text>
-          </TouchableOpacity>
-
-          {/* Profil → ProfileTab */}
-          <TouchableOpacity
-            style={styles.hubCard}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('ProfileTab')}
-          >
-            <View style={[styles.hubIconWrap, { backgroundColor: '#FFF7ED' }]}>
-              <Ionicons name="person" size={22} color="#EA580C" />
-            </View>
-            <Text style={styles.hubTitle}>Mon profil</Text>
-            <Text style={styles.hubSub} numberOfLines={1}>{fullName}</Text>
-            <Text style={[styles.hubLink, { color: '#EA580C' }]}>Accéder →</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
 
-      {/* ════════════════════════════════════════════════════
+      {/* ══════════════════════════════════════════
           MODAL POINTAGE HEBDOMADAIRE
-      ════════════════════════════════════════════════════ */}
+      ══════════════════════════════════════════ */}
       <Modal visible={showPtModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
@@ -393,7 +429,14 @@ export default function DashboardScreen() {
               </View>
             ) : (
               weekDays.map((day, i) => {
-                const cfg = STATUS_CFG[day.status] ?? STATUS_CFG.absent;
+                const statusCfg: Record<string, { label: string; color: string; bg: string }> = {
+                  ok: { label: 'Présent', color: COLORS.success, bg: '#DCFCE7' },
+                  present: { label: 'Présent', color: COLORS.success, bg: '#DCFCE7' },
+                  absent: { label: 'Absent', color: COLORS.danger, bg: '#FEE2E2' },
+                  incomplete: { label: 'Incomplet', color: '#E8910C', bg: '#FEF3C7' },
+                  anomaly: { label: 'Anomalie', color: '#6366F1', bg: '#EEF2FF' },
+                };
+                const cfg = statusCfg[day.status] ?? statusCfg.absent;
                 return (
                   <View key={i} style={styles.dayRow}>
                     <View style={[styles.dayStrip, { backgroundColor: cfg.color }]} />
@@ -406,12 +449,8 @@ export default function DashboardScreen() {
                       </Text>
                     </View>
                     <View style={styles.dayTimesCol}>
-                      <Text style={styles.dayTimeText}>
-                        Entrée : {fmtTime(day.in_time)}
-                      </Text>
-                      <Text style={[styles.dayTimeText, { marginTop: 3 }]}>
-                        Sortie : {fmtTime(day.out_time)}
-                      </Text>
+                      <Text style={styles.dayTimeText}>Entrée : {fmtTime(day.in_time)}</Text>
+                      <Text style={[styles.dayTimeText, { marginTop: 3 }]}>Sortie : {fmtTime(day.out_time)}</Text>
                       {day.worked_minutes != null && (
                         <Text style={styles.dayWorked}>{minutesToTime(day.worked_minutes)} travaillées</Text>
                       )}
@@ -424,21 +463,12 @@ export default function DashboardScreen() {
               })
             )}
           </ScrollView>
-
-          <View style={styles.modalFooter}>
-            <TouchableOpacity style={styles.exportBtn} onPress={handleExportWeekPDF} disabled={ptExporting}>
-              {ptExporting
-                ? <ActivityIndicator size="small" color={COLORS.white} />
-                : <><Ionicons name="download-outline" size={16} color={COLORS.white} /><Text style={styles.exportBtnText}>Télécharger en PDF</Text></>
-              }
-            </TouchableOpacity>
-          </View>
         </SafeAreaView>
       </Modal>
 
-      {/* ════════════════════════════════════════════════════
+      {/* ══════════════════════════════════════════
           MODAL DEMANDE DE CONGÉ
-      ════════════════════════════════════════════════════ */}
+      ══════════════════════════════════════════ */}
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
@@ -491,92 +521,297 @@ export default function DashboardScreen() {
   );
 }
 
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  center:    { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  row:       { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  scroll:    { paddingBottom: 40 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scroll: { paddingBottom: 30 },
 
-  // ── Bannière ──
-  banner: {
+  // ── Header ──
+  header: {
     backgroundColor: COLORS.primary,
-    padding: 20,
-    marginBottom: 12,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22, shadowRadius: 8, elevation: 5,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
-  greeting: { color: COLORS.white, fontSize: 22, fontWeight: 'bold' },
-  date:     { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 4, textTransform: 'capitalize' },
-  fonction: { color: 'rgba(255,255,255,0.55)', fontSize: 12, marginTop: 5 },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  brandName: {
+    color: COLORS.white,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+  },
+  brandSub: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 1,
+    marginTop: -2,
+  },
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.danger,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: COLORS.success,
+    borderWidth: 2.5,
+    borderColor: COLORS.primary,
+  },
+  greeting: {
+    color: COLORS.white,
+    fontSize: 26,
+    fontWeight: 'bold',
+  },
+  dateText: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 14,
+    marginTop: 4,
+    textTransform: 'capitalize',
+  },
+  fonctionBadge: {
+    marginTop: 12,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  fonctionText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 12,
+    fontWeight: '500',
+  },
 
-  // ── Carte pleine largeur ──
+  // ── Cards ──
   card: {
     backgroundColor: COLORS.white,
-    padding: 16,
-    marginBottom: 12,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    padding: 18,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.07, shadowRadius: 4, elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  cardTitle:  { fontSize: 14, fontWeight: '700', color: COLORS.primary },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  statusText:  { fontSize: 11, fontWeight: '700' },
-
-  // ── Pointage ──
-  ptBlock:   { gap: 10 },
-  ptRow:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  ptIconWrap: { width: 30, height: 30, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  ptLabel:   { fontSize: 14, color: COLORS.textSecondary, width: 50 },
-  ptValue:   { fontSize: 26, fontWeight: 'bold', letterSpacing: 1 },
-  ptDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 2 },
-  ptFooter:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 14 },
-  ptHintText: { fontSize: 11, color: COLORS.textSecondary },
-
-  // ── Section header ──
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 10 },
-  sectionTitle:  { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  requestBtn:    { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
-  requestBtnText: { color: COLORS.white, fontSize: 13, fontWeight: '600' },
-
-  // ── Notification ──
-  notifCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#ECFDF5', padding: 12, marginHorizontal: 16, marginBottom: 12,
-    borderRadius: 12, borderWidth: 1, borderColor: '#A7F3D0',
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  notifTitle: { fontSize: 13, fontWeight: '700', color: '#059669' },
-  notifSub:   { fontSize: 12, color: '#065F46', marginTop: 1 },
-
-  // ── Soldes ──
-  soldesRow:      { flexDirection: 'row', marginBottom: 16 },
-  soldeCard:      { flex: 1, padding: 16, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  soldePrimary:   { backgroundColor: COLORS.primary },
-  soldeSecondary: { backgroundColor: COLORS.white, borderLeftWidth: 1, borderLeftColor: COLORS.border },
-  soldeLabelLight: { fontSize: 12, color: 'rgba(255,255,255,0.75)', textAlign: 'center' },
-  soldeLabelDark:  { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center' },
-  soldeValueBig:   { fontSize: 38, fontWeight: 'bold', color: COLORS.white },
-  soldeLinkRow:    { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
-  soldeLink:       { fontSize: 11, color: 'rgba(255,255,255,0.7)' },
-
-  // ── Hub accès rapides ──
-  subTitle: {
-    fontSize: 12, fontWeight: '700', color: COLORS.textSecondary,
-    paddingHorizontal: 16, marginBottom: 10,
-    textTransform: 'uppercase', letterSpacing: 0.5,
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
-  hubGrid: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 16 },
-  hubCard: {
-    flex: 1, backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    alignItems: 'flex-start', gap: 4,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+  clockIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  hubIconWrap: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  hubTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text },
-  hubSub:   { fontSize: 11, color: COLORS.textSecondary },
-  hubLink:  { fontSize: 11, fontWeight: '600', color: COLORS.primary, marginTop: 4 },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1.5,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  voirLink: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+
+  // ── Time boxes ──
+  timeBoxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  timeBox: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+  },
+  timeBoxActive: {
+    borderColor: COLORS.success,
+    backgroundColor: '#F0FFF4',
+  },
+  timeBoxInactive: {
+    borderColor: COLORS.border,
+    backgroundColor: '#FAFAFA',
+  },
+  timeBoxLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    color: COLORS.textSecondary,
+    marginBottom: 6,
+  },
+  timeBoxValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
+
+  // ── Pointage footer ──
+  ptFooterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 12,
+  },
+  ptDurationText: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  ptWeekLink: {},
+  ptWeekLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+
+  // ── Congés section ──
+  congesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  },
+  circleContainer: {
+    position: 'relative',
+    width: 70,
+    height: 70,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  circleTextWrap: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  circleValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: COLORS.success,
+  },
+  congesInfo: {
+    flex: 1,
+  },
+  congesLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 2,
+  },
+  congesDetail: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginBottom: 10,
+  },
+  progressBarBg: {
+    height: 6,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: 6,
+    backgroundColor: COLORS.success,
+    borderRadius: 3,
+  },
+
+  // ── Alert banner ──
+  alertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  alertIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  alertContent: {
+    flex: 1,
+  },
+  alertTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#991B1B',
+  },
+  alertSubtitle: {
+    fontSize: 12,
+    color: COLORS.danger,
+    marginTop: 2,
+  },
 
   // ── Modal ──
   modal: { flex: 1, backgroundColor: COLORS.background },
@@ -584,42 +819,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
     padding: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border, backgroundColor: COLORS.white,
   },
-  modalTitle:   { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
-  modalSub:     { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+  modalTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
+  modalSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
   modalContent: { padding: 16, paddingBottom: 24 },
-  modalFooter:  { padding: 16, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.white },
 
-  // ── Rows pointage modal ──
+  // ── Week modal rows ──
   dayRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: COLORS.white, borderRadius: 12, marginBottom: 8,
     overflow: 'hidden',
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 1,
   },
-  dayStrip:    { width: 4, alignSelf: 'stretch' },
-  dayDateCol:  { width: 56, padding: 12, alignItems: 'center' },
-  dayWeekday:  { fontSize: 10, color: COLORS.textSecondary },
-  dayNum:      { fontSize: 12, fontWeight: '600', color: COLORS.text, marginTop: 2 },
+  dayStrip: { width: 4, alignSelf: 'stretch' },
+  dayDateCol: { width: 56, padding: 12, alignItems: 'center' },
+  dayWeekday: { fontSize: 10, color: COLORS.textSecondary },
+  dayNum: { fontSize: 12, fontWeight: '600', color: COLORS.text, marginTop: 2 },
   dayTimesCol: { flex: 1, paddingVertical: 12 },
   dayTimeText: { fontSize: 13, fontWeight: '500', color: COLORS.text },
-  dayWorked:   { fontSize: 11, color: COLORS.textSecondary, marginTop: 4 },
-  dayBadge:    { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginRight: 10 },
+  dayWorked: { fontSize: 11, color: COLORS.textSecondary, marginTop: 4 },
+  dayBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginRight: 10 },
   dayBadgeText: { fontSize: 10, fontWeight: '600' },
 
-  empty:     { alignItems: 'center', paddingTop: 60, gap: 12 },
+  empty: { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyText: { color: COLORS.textSecondary, fontSize: 15 },
-
-  exportBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 12, height: 50,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8,
-  },
-  exportBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '600' },
 
   // ── Formulaire congé ──
   fieldLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 6, marginTop: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
-  chip:       { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border },
+  chip: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border },
   chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  chipText:   { fontSize: 13, fontWeight: '500', color: COLORS.textSecondary },
+  chipText: { fontSize: 13, fontWeight: '500', color: COLORS.textSecondary },
   chipTextActive: { color: COLORS.white },
   input: { backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 15, color: COLORS.text },
   submitBtn: {
