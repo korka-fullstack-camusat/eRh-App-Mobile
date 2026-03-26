@@ -14,7 +14,7 @@ import { getMyAttendance } from '@/services/attendanceService';
 import type { LeaveBalance, LeaveRequest, LeaveType } from '@/types/leave';
 import type { EmployeePeriodDetailDay } from '@/types/attendance';
 import { COLORS } from '@/theme';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, getDate } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import CamusatLogo from '@/components/CamusatLogo';
 
@@ -137,6 +137,17 @@ export default function DashboardScreen() {
   const firstName = fullName.split(' ')[0];
   const totalRemaining = balances.reduce((s, b) => s + (b.remaining_days ?? 0), 0);
 
+  // Congés du mois en cours (approuvés dont les dates chevauchent ce mois)
+  const monthStart = format(startOfMonth(today), 'yyyy-MM-dd');
+  const monthEnd   = format(endOfMonth(today), 'yyyy-MM-dd');
+  const leavesThisMonth = activeLeaves.filter(l =>
+    (l.status === 'APPROVED' || l.status === 'approved') &&
+    l.start_date <= monthEnd && l.end_date >= monthStart
+  );
+
+  // Notification début de mois (jours 1 à 7)
+  const isStartOfMonth = getDate(today) <= 7;
+
   if (empLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
   }
@@ -210,62 +221,77 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Soldes */}
-        {balances.length > 0 ? (
-          <View style={styles.balancesCard}>
-            <View style={styles.balancesHeader}>
-              <Text style={styles.balancesTitle}>Soldes disponibles</Text>
-              <View style={styles.totalPill}>
-                <Text style={styles.totalPillText}>{totalRemaining}j restants</Text>
-              </View>
+        {/* Notification début de mois */}
+        {isStartOfMonth && (
+          <View style={styles.notifCard}>
+            <Ionicons name="gift-outline" size={20} color="#059669" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.notifTitle}>Solde mis à jour</Text>
+              <Text style={styles.notifText}>+2 jours de congé crédités ce mois</Text>
             </View>
-            {balances.map((b, i) => {
-              const remaining = b.remaining_days ?? 0;
-              const total = b.total_days ?? 0;
-              const pct = total > 0 ? Math.min((remaining / total) * 100, 100) : 0;
-              return (
-                <View key={i} style={[styles.balanceRow, i < balances.length - 1 && styles.balanceRowBorder]}>
-                  <Text style={styles.balanceType} numberOfLines={1}>{b.leave_type_name}</Text>
-                  <View style={styles.balanceRight}>
-                    <View style={styles.balanceMini}>
-                      <View style={[styles.balanceMiniBar, { width: `${pct}%`, backgroundColor: pct < 20 ? COLORS.danger : COLORS.primary }]} />
-                    </View>
-                    <Text style={[styles.balanceDays, pct < 20 && { color: COLORS.danger }]}>{remaining}j</Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        ) : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Aucun solde de congé disponible</Text>
           </View>
         )}
 
-        {/* Congés actifs */}
-        {activeLeaves.length > 0 && (
-          <>
-            <Text style={styles.activeTitle}>En cours / En attente</Text>
-            {activeLeaves.slice(0, 3).map((leave, i) => {
-              const isApproved = leave.status === 'APPROVED' || leave.status === 'approved';
-              const color = isApproved ? COLORS.success : COLORS.warning;
-              const label = isApproved ? 'Approuvé' : 'En attente';
-              return (
-                <View key={i} style={[styles.leaveChip, { borderLeftColor: color }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.leaveChipType}>{leave.leave_type_name}</Text>
-                    <Text style={styles.leaveChipDates}>
-                      {format(new Date(leave.start_date), 'd MMM', { locale: fr })} → {format(new Date(leave.end_date), 'd MMM yyyy', { locale: fr })} · {leave.duration_days}j
-                    </Text>
+        {/* Solde actuel */}
+        <View style={styles.balancesCard}>
+          {/* Total en évidence */}
+          <View style={styles.totalRow}>
+            <View>
+              <Text style={styles.totalLabel}>Solde actuel</Text>
+              <Text style={styles.totalValue}>{totalRemaining} jours</Text>
+            </View>
+            <View style={styles.totalIcon}>
+              <Ionicons name="wallet-outline" size={24} color={COLORS.primary} />
+            </View>
+          </View>
+
+          {/* Détail par type */}
+          {balances.length > 0 && (
+            <View style={styles.balancesList}>
+              {balances.map((b, i) => {
+                const remaining = b.remaining_days ?? 0;
+                const total = b.total_days ?? 0;
+                const pct = total > 0 ? Math.min((remaining / total) * 100, 100) : 0;
+                return (
+                  <View key={i} style={[styles.balanceRow, i < balances.length - 1 && styles.balanceRowBorder]}>
+                    <Text style={styles.balanceType} numberOfLines={1}>{b.leave_type_name}</Text>
+                    <View style={styles.balanceRight}>
+                      <View style={styles.balanceMini}>
+                        <View style={[styles.balanceMiniBar, { width: `${pct}%`, backgroundColor: pct < 20 ? COLORS.danger : COLORS.primary }]} />
+                      </View>
+                      <Text style={[styles.balanceDays, pct < 20 && { color: COLORS.danger }]}>{remaining}j</Text>
+                    </View>
                   </View>
-                  <View style={[styles.leaveMini, { backgroundColor: `${color}15` }]}>
-                    <Text style={[styles.leaveMiniText, { color }]}>{label}</Text>
-                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+
+        {/* Congés ce mois */}
+        <View style={styles.monthLeaveCard}>
+          <View style={styles.monthLeaveHeader}>
+            <Ionicons name="calendar-outline" size={15} color={COLORS.textSecondary} />
+            <Text style={styles.monthLeaveTitle}>
+              Ce mois — {format(today, 'MMMM yyyy', { locale: fr })}
+            </Text>
+          </View>
+          {leavesThisMonth.length > 0 ? (
+            leavesThisMonth.map((leave, i) => (
+              <View key={i} style={styles.leaveChip}>
+                <Ionicons name="checkmark-circle" size={14} color={COLORS.success} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.leaveChipType}>{leave.leave_type_name}</Text>
+                  <Text style={styles.leaveChipDates}>
+                    {format(new Date(leave.start_date), 'd MMM', { locale: fr })} → {format(new Date(leave.end_date), 'd MMM', { locale: fr })} · {leave.duration_days}j
+                  </Text>
                 </View>
-              );
-            })}
-          </>
-        )}
+              </View>
+            ))
+          ) : (
+            <Text style={styles.noLeaveText}>Pas de congé ce mois</Text>
+          )}
+        </View>
       </ScrollView>
 
       {/* Modal demande de congé */}
@@ -379,22 +405,39 @@ const styles = StyleSheet.create({
   balanceMiniBar: { height: '100%', borderRadius: 3 },
   balanceDays: { fontSize: 14, fontWeight: 'bold', color: COLORS.primary, minWidth: 28, textAlign: 'right' },
 
-  emptyCard: {
-    backgroundColor: COLORS.white, borderRadius: 16, padding: 20, alignItems: 'center', marginBottom: 12,
+  // Notification début de mois
+  notifCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: '#ECFDF5', borderRadius: 14, padding: 14, marginBottom: 12,
+    borderWidth: 1, borderColor: '#A7F3D0',
   },
-  emptyText: { color: COLORS.textSecondary, fontSize: 13 },
+  notifTitle: { fontSize: 13, fontWeight: '700', color: '#059669' },
+  notifText: { fontSize: 12, color: '#065F46', marginTop: 1 },
 
-  // Active leaves
-  activeTitle: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 },
+  // Balances card
+  totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  totalLabel: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 2 },
+  totalValue: { fontSize: 28, fontWeight: 'bold', color: COLORS.primary },
+  totalIcon: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: `${COLORS.primary}10`, justifyContent: 'center', alignItems: 'center',
+  },
+  balancesList: { borderTopWidth: 1, borderTopColor: COLORS.background, paddingTop: 4 },
+
+  // Month leaves card
+  monthLeaveCard: {
+    backgroundColor: COLORS.white, borderRadius: 16, padding: 14, marginBottom: 12,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 6, elevation: 1,
+  },
+  monthLeaveHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+  monthLeaveTitle: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'capitalize' },
   leaveChip: {
-    backgroundColor: COLORS.white, borderRadius: 12, padding: 12, flexDirection: 'row',
-    alignItems: 'center', marginBottom: 8, borderLeftWidth: 4,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.background,
   },
   leaveChipType: { fontSize: 13, fontWeight: '600', color: COLORS.text },
-  leaveChipDates: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  leaveMini: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 14 },
-  leaveMiniText: { fontSize: 11, fontWeight: '700' },
+  leaveChipDates: { fontSize: 12, color: COLORS.textSecondary, marginTop: 1 },
+  noLeaveText: { fontSize: 13, color: COLORS.textSecondary, fontStyle: 'italic' },
 
   // Modal
   modal: { flex: 1, backgroundColor: COLORS.background },
