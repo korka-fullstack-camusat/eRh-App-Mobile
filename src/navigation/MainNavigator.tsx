@@ -29,8 +29,8 @@ const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 function HeaderLogo() {
   return (
-    <View style={{ paddingLeft: 4 }}>
-      <CamusatLogo size={26} showText={true} textColor={COLORS.white} />
+    <View style={{ alignItems: 'center' }}>
+      <CamusatLogo size={30} showText={true} textColor={COLORS.white} />
     </View>
   );
 }
@@ -57,6 +57,7 @@ export default function MainNavigator() {
         headerStyle: { backgroundColor: COLORS.primary },
         headerTintColor: COLORS.white,
         headerTitleStyle: { fontWeight: 'bold', fontSize: 17 },
+        headerTitleAlign: 'center',
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarStyle: {
@@ -80,7 +81,7 @@ export default function MainNavigator() {
       <Tab.Screen
         name="DashboardTab"
         component={DashboardScreen}
-        options={{ title: 'Accueil', headerTitle: () => <HeaderLogo /> }}
+        options={{ title: 'Accueil', headerTitle: () => <HeaderLogo />, headerTitleAlign: 'center' }}
       />
       <Tab.Screen
         name="LeavesTab"
