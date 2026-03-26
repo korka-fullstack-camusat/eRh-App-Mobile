@@ -5,78 +5,48 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/theme';
 
 import DashboardScreen from '@/screens/DashboardScreen';
-import EmployeesScreen from '@/screens/employees/EmployeesScreen';
-import EmployeeDetailScreen from '@/screens/employees/EmployeeDetailScreen';
 import AttendanceScreen from '@/screens/attendance/AttendanceScreen';
 import LeavesScreen from '@/screens/leaves/LeavesScreen';
-import ProfileScreen from '@/screens/ProfileScreen';
+import PayslipsScreen from '@/screens/payslips/PayslipsScreen';
+import DossierScreen from '@/screens/dossier/DossierScreen';
 import ChangePasswordScreen from '@/screens/auth/ChangePasswordScreen';
 
 export type RootTabParamList = {
   DashboardTab: undefined;
-  EmployeesTab: undefined;
-  AttendanceTab: undefined;
   LeavesTab: undefined;
-  ProfileTab: undefined;
+  PayslipsTab: undefined;
+  DossierTab: undefined;
+  AttendanceTab: undefined;
 };
 
-export type EmployeeStackParamList = {
-  EmployeesList: undefined;
-  EmployeeDetail: { employeeId: number };
-};
-
-export type ProfileStackParamList = {
-  ProfileMain: undefined;
+export type DossierStackParamList = {
+  DossierMain: undefined;
   ChangePassword: undefined;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
-const EmployeeStack = createNativeStackNavigator<EmployeeStackParamList>();
-const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
+const DossierStack = createNativeStackNavigator<DossierStackParamList>();
 
-function EmployeesStackNavigator() {
+function DossierStackNavigator() {
   return (
-    <EmployeeStack.Navigator
+    <DossierStack.Navigator
       screenOptions={{
         headerStyle: { backgroundColor: COLORS.primary },
         headerTintColor: COLORS.white,
         headerTitleStyle: { fontWeight: 'bold' },
       }}
     >
-      <EmployeeStack.Screen
-        name="EmployeesList"
-        component={EmployeesScreen}
-        options={{ title: 'Employés' }}
+      <DossierStack.Screen
+        name="DossierMain"
+        component={DossierScreen}
+        options={{ title: 'Mon dossier' }}
       />
-      <EmployeeStack.Screen
-        name="EmployeeDetail"
-        component={EmployeeDetailScreen}
-        options={{ title: 'Détail employé' }}
-      />
-    </EmployeeStack.Navigator>
-  );
-}
-
-function ProfileStackNavigator() {
-  return (
-    <ProfileStack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: COLORS.primary },
-        headerTintColor: COLORS.white,
-        headerTitleStyle: { fontWeight: 'bold' },
-      }}
-    >
-      <ProfileStack.Screen
-        name="ProfileMain"
-        component={ProfileScreen}
-        options={{ title: 'Mon profil' }}
-      />
-      <ProfileStack.Screen
+      <DossierStack.Screen
         name="ChangePassword"
         component={ChangePasswordScreen}
         options={{ title: 'Changer le mot de passe' }}
       />
-    </ProfileStack.Navigator>
+    </DossierStack.Navigator>
   );
 }
 
@@ -98,15 +68,15 @@ export default function MainNavigator() {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
           if (route.name === 'DashboardTab') {
-            iconName = focused ? 'grid' : 'grid-outline';
-          } else if (route.name === 'EmployeesTab') {
-            iconName = focused ? 'people' : 'people-outline';
-          } else if (route.name === 'AttendanceTab') {
-            iconName = focused ? 'time' : 'time-outline';
+            iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'LeavesTab') {
             iconName = focused ? 'calendar' : 'calendar-outline';
-          } else if (route.name === 'ProfileTab') {
+          } else if (route.name === 'PayslipsTab') {
+            iconName = focused ? 'document-text' : 'document-text-outline';
+          } else if (route.name === 'DossierTab') {
             iconName = focused ? 'person' : 'person-outline';
+          } else if (route.name === 'AttendanceTab') {
+            iconName = focused ? 'time' : 'time-outline';
           }
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -115,27 +85,27 @@ export default function MainNavigator() {
       <Tab.Screen
         name="DashboardTab"
         component={DashboardScreen}
-        options={{ title: 'Tableau de bord', headerTitle: 'eRH Employer' }}
-      />
-      <Tab.Screen
-        name="EmployeesTab"
-        component={EmployeesStackNavigator}
-        options={{ title: 'Employés', headerShown: false }}
-      />
-      <Tab.Screen
-        name="AttendanceTab"
-        component={AttendanceScreen}
-        options={{ title: 'Présences', headerTitle: 'Présences' }}
+        options={{ title: 'Accueil', headerTitle: 'eRH Employé' }}
       />
       <Tab.Screen
         name="LeavesTab"
         component={LeavesScreen}
-        options={{ title: 'Congés', headerTitle: 'Gestion des congés' }}
+        options={{ title: 'Congés', headerTitle: 'Mes congés' }}
       />
       <Tab.Screen
-        name="ProfileTab"
-        component={ProfileStackNavigator}
-        options={{ title: 'Profil', headerShown: false }}
+        name="PayslipsTab"
+        component={PayslipsScreen}
+        options={{ title: 'Bulletins', headerTitle: 'Mes bulletins' }}
+      />
+      <Tab.Screen
+        name="DossierTab"
+        component={DossierStackNavigator}
+        options={{ title: 'Dossier', headerShown: false }}
+      />
+      <Tab.Screen
+        name="AttendanceTab"
+        component={AttendanceScreen}
+        options={{ title: 'Présences', headerTitle: 'Mes présences' }}
       />
     </Tab.Navigator>
   );
