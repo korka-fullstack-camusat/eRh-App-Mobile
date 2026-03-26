@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, RefreshControl,
-  TouchableOpacity, ActivityIndicator, Modal, TextInput,
-  Alert, Animated, useWindowDimensions,
+  TouchableOpacity, ActivityIndicator, Modal, TextInput, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,20 +9,16 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import {
-  getMyLeaveBalances, getMyLeaveRequests,
-  getLeaveTypes, createLeaveRequest,
+  getMyLeaveBalances, getLeaveTypes, createLeaveRequest,
 } from '@/services/leaveService';
 import { getMyAttendance } from '@/services/attendanceService';
-import type { LeaveBalance, LeaveRequest, LeaveType } from '@/types/leave';
+import type { LeaveBalance, LeaveType } from '@/types/leave';
 import type { EmployeePeriodDetailDay } from '@/types/attendance';
 import { COLORS } from '@/theme';
 import {
-  format, startOfMonth, endOfMonth, subMonths,
-  getDate, startOfWeek, endOfWeek,
+  format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
 } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 
 function fmtTime(val?: string | null): string {
   if (!val) return '--:--';
@@ -42,64 +37,48 @@ function minutesToTime(min?: number | null): string {
 }
 
 const STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
-  ok:         { label: 'Présent',   color: COLORS.success,  bg: '#DCFCE7' },
-  present:    { label: 'Présent',   color: COLORS.success,  bg: '#DCFCE7' },
-  absent:     { label: 'Absent',    color: COLORS.danger,   bg: '#FEE2E2' },
-  incomplete: { label: 'Incomplet', color: COLORS.warning,  bg: '#FEF3C7' },
-  anomaly:    { label: 'Anomalie',  color: '#6366F1',       bg: '#EEF2FF' },
+  ok:         { label: 'Présent',   color: COLORS.success, bg: '#DCFCE7' },
+  present:    { label: 'Présent',   color: COLORS.success, bg: '#DCFCE7' },
+  absent:     { label: 'Absent',    color: COLORS.danger,  bg: '#FEE2E2' },
+  incomplete: { label: 'Incomplet', color: COLORS.warning, bg: '#FEF3C7' },
+  anomaly:    { label: 'Anomalie',  color: '#6366F1',      bg: '#EEF2FF' },
 };
 
 export default function DashboardScreen() {
   const { user } = useAuth();
   const { employee, isLoading: empLoading } = useEmployee();
   const navigation = useNavigation<any>();
-  const { width } = useWindowDimensions();
 
   const [balances, setBalances]   = useState<LeaveBalance[]>([]);
   const [allDays, setAllDays]     = useState<EmployeePeriodDetailDay[]>([]);
-  const [allLeaves, setAllLeaves] = useState<LeaveRequest[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const [showPtModal, setShowPtModal] = useState(false);
-  const [ptExporting, setPtExporting] = useState(false);
-
-  const [showModal, setShowModal] = useState(false);
-  const [selType, setSelType]     = useState<number | null>(null);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate]     = useState('');
-  const [reason, setReason]       = useState('');
-  const [submitting, setSubmitting] = useState(false);
-
-  const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(18)).current;
+  const [showModal, setShowModal]     = useState(false);
+  const [selType, setSelType]         = useState<number | null>(null);
+  const [startDate, setStartDate]     = useState('');
+  const [endDate, setEndDate]         = useState('');
+  const [reason, setReason]           = useState('');
+  const [submitting, setSubmitting]   = useState(false);
 
   const today    = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
   const todayLabel = format(today, 'EEEE d MMMM yyyy', { locale: fr });
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 1, duration: 480, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 480, useNativeDriver: true }),
-    ]).start();
-  }, []);
 
   const loadData = useCallback(async () => {
     if (!employee) return;
     const start = format(startOfMonth(today), 'yyyy-MM-dd');
     const end   = format(endOfMonth(today),   'yyyy-MM-dd');
 
-    const [bal, att, reqs, types] = await Promise.allSettled([
+    const [bal, att, types] = await Promise.allSettled([
       getMyLeaveBalances(employee.id),
       getMyAttendance({ employee_id: employee.id, start, end }),
-      getMyLeaveRequests(employee.id),
       getLeaveTypes(),
     ]);
 
     if (bal.status   === 'fulfilled') setBalances(bal.value);
     if (att.status   === 'fulfilled') setAllDays(att.value.days ?? []);
-    if (reqs.status  === 'fulfilled') setAllLeaves(reqs.value);
     if (types.status === 'fulfilled') setLeaveTypes(types.value);
   }, [employee]);
 
@@ -137,81 +116,29 @@ export default function DashboardScreen() {
     }
   };
 
-  // ── Pointage ──────────────────────────────────────────────────────────────
   const todayRecord = allDays.find(d => d.date === todayStr) ?? null;
-  const getPt = () => {
-    if (!todayRecord) return { label: 'Aucun pointage', color: COLORS.textSecondary, bg: COLORS.border, icon: 'remove-circle-outline' as const, entree: '--:--', sortie: '--:--' };
-    const s = todayRecord.status;
-    const entree = fmtTime(todayRecord.in_time);
-    const sortie = fmtTime(todayRecord.out_time);
-    if (s === 'ok' || s === 'present') return { label: 'Présent', color: COLORS.success, bg: '#DCFCE7', icon: 'checkmark-circle' as const, entree, sortie };
-    if (s === 'absent')                return { label: 'Absent',  color: COLORS.danger,  bg: '#FEE2E2', icon: 'close-circle' as const, entree, sortie };
-    return { label: 'Incomplet', color: COLORS.warning, bg: '#FEF3C7', icon: 'alert-circle' as const, entree, sortie };
-  };
-  const pt = getPt();
 
-  // ── Semaine courante ──────────────────────────────────────────────────────
   const weekStart    = startOfWeek(today, { weekStartsOn: 1 });
   const weekEnd      = endOfWeek(today,   { weekStartsOn: 1 });
   const weekStartStr = format(weekStart, 'yyyy-MM-dd');
   const weekEndStr   = format(weekEnd,   'yyyy-MM-dd');
   const weekDays     = allDays.filter(d => d.date >= weekStartStr && d.date <= weekEndStr);
 
-  // ── Soldes ────────────────────────────────────────────────────────────────
   const totalRemaining = balances.reduce((s, b) => s + (b.remaining_days ?? b.remaining ?? 0), 0);
-
-  const threeMonthsAgo = format(startOfMonth(subMonths(today, 2)), 'yyyy-MM-dd');
-  const monthEndStr    = format(endOfMonth(today), 'yyyy-MM-dd');
-  const takenLast3 = allLeaves
-    .filter(l => (l.status === 'APPROVED' || l.status === 'approved') && l.start_date <= monthEndStr && l.end_date >= threeMonthsAgo)
-    .reduce((sum, l) => sum + (l.duration_days ?? 0), 0);
-
-  const isStartOfMonth = getDate(today) <= 7;
   const fullName  = employee ? `${employee.prenom} ${employee.nom}` : user?.username || 'Employé';
   const firstName = fullName.split(' ')[0];
 
-  // ── Export PDF pointage semaine ──────────────────────────────────────────
-  const handleExportWeekPDF = async () => {
-    if (weekDays.length === 0) { Alert.alert('Export', 'Aucune donnée cette semaine.'); return; }
-    setPtExporting(true);
-    try {
-      const employeeName = employee ? `${employee.prenom} ${employee.nom}` : '';
-      const rows = weekDays.map(d => {
-        const cfg = STATUS_CFG[d.status] ?? STATUS_CFG.absent;
-        return `<tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${format(new Date(d.date), 'EEE d MMM', { locale: fr })}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;"><span style="background:${cfg.bg};color:${cfg.color};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">${cfg.label}</span></td>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${fmtTime(d.in_time)}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${fmtTime(d.out_time)}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #eee;">${minutesToTime(d.worked_minutes)}</td>
-        </tr>`;
-      }).join('');
-
-      const html = `<html><head><meta charset="utf-8"/><style>
-        body{font-family:-apple-system,sans-serif;margin:0;padding:20px;color:#1A1A2E;}
-        .header{background:#003C71;color:white;padding:18px 20px;border-radius:8px;margin-bottom:20px;}
-        .header h1{margin:0;font-size:18px;} .header p{margin:4px 0 0;opacity:.8;font-size:12px;}
-        table{width:100%;border-collapse:collapse;font-size:13px;}
-        th{background:#F5F7FA;padding:10px 12px;text-align:left;font-weight:600;color:#6C757D;font-size:11px;text-transform:uppercase;letter-spacing:.4px;}
-        .footer{margin-top:18px;text-align:center;color:#999;font-size:10px;border-top:1px solid #eee;padding-top:10px;}
-      </style></head><body>
-        <div class="header">
-          <h1>Pointage hebdomadaire — CAMUSAT</h1>
-          <p>${employeeName} • ${employee?.matricule ?? ''} • Semaine du ${format(weekStart, 'd MMM', { locale: fr })} au ${format(weekEnd, 'd MMM yyyy', { locale: fr })}</p>
-        </div>
-        <table><thead><tr><th>Jour</th><th>Statut</th><th>Entrée</th><th>Sortie</th><th>Durée</th></tr></thead>
-        <tbody>${rows}</tbody></table>
-        <div class="footer">Document confidentiel — CAMUSAT eRH — ${format(new Date(), 'd MMMM yyyy', { locale: fr })}</div>
-      </body></html>`;
-
-      const { uri } = await Print.printToFileAsync({ html, base64: false });
-      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
-    } catch {
-      Alert.alert('Erreur', 'Impossible de générer le PDF.');
-    } finally {
-      setPtExporting(false);
-    }
+  const getStatus = () => {
+    if (!todayRecord) return {
+      label: 'Non pointé', color: COLORS.textSecondary,
+      bg: '#F1F5F9', icon: 'remove-circle-outline' as const,
+    };
+    const s = todayRecord.status;
+    if (s === 'ok' || s === 'present') return { label: 'Présent',   color: COLORS.success, bg: '#DCFCE7', icon: 'checkmark-circle' as const };
+    if (s === 'absent')                return { label: 'Absent',    color: COLORS.danger,  bg: '#FEE2E2', icon: 'close-circle'      as const };
+    return                                    { label: 'Incomplet', color: COLORS.warning, bg: '#FEF3C7', icon: 'alert-circle'       as const };
   };
+  const pt = getStatus();
 
   if (empLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
@@ -224,153 +151,90 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Bannière — greeting seulement, pas de logo ── */}
-        <Animated.View style={[styles.banner, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+        {/* ── Bannière ── */}
+        <View style={styles.banner}>
           <Text style={styles.greeting}>Bonjour, {firstName} !</Text>
           <Text style={styles.date}>{todayLabel}</Text>
           {employee && (
             <Text style={styles.fonction}>{employee.fonction} • {employee.matricule}</Text>
           )}
-        </Animated.View>
+        </View>
 
         {/* ── Pointage du jour ── */}
         <TouchableOpacity style={styles.card} activeOpacity={0.75} onPress={() => setShowPtModal(true)}>
-          <View style={styles.cardHeader}>
+          <View style={styles.cardTop}>
             <View style={styles.row}>
               <Ionicons name="finger-print-outline" size={17} color={COLORS.primary} />
               <Text style={styles.cardTitle}>Pointage du jour</Text>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: pt.bg }]}>
+            <View style={[styles.badge, { backgroundColor: pt.bg }]}>
               <Ionicons name={pt.icon} size={13} color={pt.color} />
-              <Text style={[styles.statusText, { color: pt.color }]}>{pt.label}</Text>
+              <Text style={[styles.badgeText, { color: pt.color }]}>{pt.label}</Text>
             </View>
           </View>
-
-          {/* Entrée / Sortie en colonne */}
-          <View style={styles.ptBlock}>
-            <View style={styles.ptRow}>
-              <View style={[styles.ptIconWrap, { backgroundColor: '#DCFCE7' }]}>
-                <Ionicons name="log-in-outline" size={16} color={COLORS.success} />
-              </View>
-              <Text style={styles.ptLabel}>Entrée</Text>
-              <Text style={[styles.ptValue, { color: pt.entree !== '--:--' ? COLORS.success : COLORS.textSecondary }]}>
-                {pt.entree}
-              </Text>
+          <View style={styles.timesRow}>
+            <View style={styles.timeItem}>
+              <Text style={styles.timeLabel}>Entrée</Text>
+              <Text style={[styles.timeValue, { color: COLORS.success }]}>{fmtTime(todayRecord?.in_time)}</Text>
             </View>
-            <View style={styles.ptDivider} />
-            <View style={styles.ptRow}>
-              <View style={[styles.ptIconWrap, { backgroundColor: '#DBEAFE' }]}>
-                <Ionicons name="log-out-outline" size={16} color={COLORS.primary} />
-              </View>
-              <Text style={styles.ptLabel}>Sortie</Text>
-              <Text style={[styles.ptValue, { color: pt.sortie !== '--:--' ? COLORS.primary : COLORS.textSecondary }]}>
-                {pt.sortie}
-              </Text>
+            <View style={styles.timeSep} />
+            <View style={styles.timeItem}>
+              <Text style={styles.timeLabel}>Sortie</Text>
+              <Text style={[styles.timeValue, { color: COLORS.primary }]}>{fmtTime(todayRecord?.out_time)}</Text>
             </View>
           </View>
-
-          <View style={styles.ptFooter}>
-            <Text style={styles.ptHintText}>Appuyez pour voir la semaine</Text>
-            <Ionicons name="chevron-forward" size={14} color={COLORS.textSecondary} />
-          </View>
+          <Text style={styles.hint}>Appuyez pour voir la semaine</Text>
         </TouchableOpacity>
 
-        {/* ── Notif début de mois ── */}
-        {isStartOfMonth && (
-          <View style={styles.notifCard}>
-            <Ionicons name="gift-outline" size={18} color="#059669" />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.notifTitle}>Solde mis à jour</Text>
-              <Text style={styles.notifSub}>+2 jours de congé crédités ce mois</Text>
+        {/* ── Solde de congés ── */}
+        <View style={styles.card}>
+          <View style={styles.cardTop}>
+            <View style={styles.row}>
+              <Ionicons name="calendar-outline" size={17} color="#059669" />
+              <Text style={styles.cardTitle}>Solde de congés</Text>
             </View>
+            <TouchableOpacity onPress={() => navigation.navigate('LeavesTab')}>
+              <Text style={styles.seeMore}>Voir →</Text>
+            </TouchableOpacity>
           </View>
-        )}
-
-        {/* ── Mes congés ── */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Mes congés</Text>
-          <TouchableOpacity style={styles.requestBtn} onPress={() => setShowModal(true)}>
-            <Ionicons name="add" size={16} color={COLORS.white} />
-            <Text style={styles.requestBtnText}>Demander</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.soldesRow}>
-          {/* Solde actuel → Congés */}
-          <TouchableOpacity
-            style={[styles.soldeCard, styles.soldePrimary]}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('LeavesTab')}
-          >
-            <Ionicons name="calendar-outline" size={20} color="rgba(255,255,255,0.8)" />
-            <Text style={styles.soldeValueBig}>{totalRemaining}</Text>
-            <Text style={styles.soldeLabelLight}>jours restants</Text>
-            <View style={styles.soldeLinkRow}>
-              <Text style={styles.soldeLink}>Voir le détail</Text>
-              <Ionicons name="chevron-forward" size={11} color="rgba(255,255,255,0.7)" />
-            </View>
-          </TouchableOpacity>
-
-          {/* Pris 3 mois */}
-          <View style={[styles.soldeCard, styles.soldeSecondary]}>
-            <Ionicons name="time-outline" size={20} color={COLORS.textSecondary} />
-            <Text style={[styles.soldeValueBig, { color: COLORS.text }]}>{takenLast3}</Text>
-            <Text style={styles.soldeLabelDark}>jours pris</Text>
-            <Text style={[styles.soldeLabelDark, { fontSize: 10, marginTop: 2 }]}>3 derniers mois</Text>
+          <View style={styles.balanceRow}>
+            <Text style={styles.balanceValue}>{totalRemaining}</Text>
+            <Text style={styles.balanceLabel}> jours disponibles</Text>
           </View>
         </View>
 
         {/* ── Accès rapides ── */}
-        <Text style={styles.subTitle}>Accès rapides</Text>
-
-        <View style={styles.hubGrid}>
-          {/* Congés → LeavesTab */}
-          <TouchableOpacity
-            style={styles.hubCard}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('LeavesTab')}
-          >
-            <View style={[styles.hubIconWrap, { backgroundColor: '#EFF6FF' }]}>
-              <Ionicons name="calendar" size={22} color={COLORS.primary} />
+        <Text style={styles.sectionTitle}>Accès rapides</Text>
+        <View style={styles.grid}>
+          <TouchableOpacity style={styles.gridItem} onPress={() => setShowModal(true)}>
+            <View style={[styles.gridIcon, { backgroundColor: '#EFF6FF' }]}>
+              <Ionicons name="add-circle" size={26} color={COLORS.primary} />
             </View>
-            <Text style={styles.hubTitle}>Congés</Text>
-            <Text style={styles.hubSub}>Historique & demandes</Text>
-            <Text style={styles.hubLink}>Accéder →</Text>
+            <Text style={styles.gridLabel}>Demande</Text>
+            <Text style={styles.gridSub}>de congé</Text>
           </TouchableOpacity>
 
-          {/* Bulletins → PayslipsTab */}
-          <TouchableOpacity
-            style={styles.hubCard}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('PayslipsTab')}
-          >
-            <View style={[styles.hubIconWrap, { backgroundColor: '#F0FDF4' }]}>
-              <Ionicons name="document-text" size={22} color="#059669" />
+          <TouchableOpacity style={styles.gridItem} onPress={() => navigation.navigate('PayslipsTab')}>
+            <View style={[styles.gridIcon, { backgroundColor: '#F0FDF4' }]}>
+              <Ionicons name="document-text" size={26} color="#059669" />
             </View>
-            <Text style={styles.hubTitle}>Bulletins</Text>
-            <Text style={styles.hubSub}>Mes bulletins de paie</Text>
-            <Text style={[styles.hubLink, { color: '#059669' }]}>Accéder →</Text>
+            <Text style={styles.gridLabel}>Bulletins</Text>
+            <Text style={styles.gridSub}>de paie</Text>
           </TouchableOpacity>
 
-          {/* Profil → ProfileTab */}
-          <TouchableOpacity
-            style={styles.hubCard}
-            activeOpacity={0.8}
-            onPress={() => navigation.navigate('ProfileTab')}
-          >
-            <View style={[styles.hubIconWrap, { backgroundColor: '#FFF7ED' }]}>
-              <Ionicons name="person" size={22} color="#EA580C" />
+          <TouchableOpacity style={styles.gridItem} onPress={() => navigation.navigate('ProfileTab')}>
+            <View style={[styles.gridIcon, { backgroundColor: '#FFF7ED' }]}>
+              <Ionicons name="person" size={26} color="#EA580C" />
             </View>
-            <Text style={styles.hubTitle}>Mon profil</Text>
-            <Text style={styles.hubSub} numberOfLines={1}>{fullName}</Text>
-            <Text style={[styles.hubLink, { color: '#EA580C' }]}>Accéder →</Text>
+            <Text style={styles.gridLabel}>Mon profil</Text>
+            <Text style={styles.gridSub} numberOfLines={1}>{firstName}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
-      {/* ════════════════════════════════════════════════════
+      {/* ════════════════════════════════════
           MODAL POINTAGE HEBDOMADAIRE
-      ════════════════════════════════════════════════════ */}
+      ════════════════════════════════════ */}
       <Modal visible={showPtModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
@@ -406,12 +270,8 @@ export default function DashboardScreen() {
                       </Text>
                     </View>
                     <View style={styles.dayTimesCol}>
-                      <Text style={styles.dayTimeText}>
-                        Entrée : {fmtTime(day.in_time)}
-                      </Text>
-                      <Text style={[styles.dayTimeText, { marginTop: 3 }]}>
-                        Sortie : {fmtTime(day.out_time)}
-                      </Text>
+                      <Text style={styles.dayTimeText}>Entrée : {fmtTime(day.in_time)}</Text>
+                      <Text style={[styles.dayTimeText, { marginTop: 3 }]}>Sortie : {fmtTime(day.out_time)}</Text>
                       {day.worked_minutes != null && (
                         <Text style={styles.dayWorked}>{minutesToTime(day.worked_minutes)} travaillées</Text>
                       )}
@@ -424,21 +284,12 @@ export default function DashboardScreen() {
               })
             )}
           </ScrollView>
-
-          <View style={styles.modalFooter}>
-            <TouchableOpacity style={styles.exportBtn} onPress={handleExportWeekPDF} disabled={ptExporting}>
-              {ptExporting
-                ? <ActivityIndicator size="small" color={COLORS.white} />
-                : <><Ionicons name="download-outline" size={16} color={COLORS.white} /><Text style={styles.exportBtnText}>Télécharger en PDF</Text></>
-              }
-            </TouchableOpacity>
-          </View>
         </SafeAreaView>
       </Modal>
 
-      {/* ════════════════════════════════════════════════════
+      {/* ════════════════════════════════════
           MODAL DEMANDE DE CONGÉ
-      ════════════════════════════════════════════════════ */}
+      ════════════════════════════════════ */}
       <Modal visible={showModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
@@ -464,21 +315,31 @@ export default function DashboardScreen() {
             </ScrollView>
 
             <Text style={styles.fieldLabel}>Date de début * (AAAA-MM-JJ)</Text>
-            <TextInput style={styles.input} value={startDate} onChangeText={setStartDate}
-              placeholder="2026-04-01" placeholderTextColor={COLORS.textSecondary} keyboardType="numbers-and-punctuation" />
+            <TextInput
+              style={styles.input} value={startDate} onChangeText={setStartDate}
+              placeholder="2026-04-01" placeholderTextColor={COLORS.textSecondary}
+              keyboardType="numbers-and-punctuation"
+            />
 
             <Text style={styles.fieldLabel}>Date de fin * (AAAA-MM-JJ)</Text>
-            <TextInput style={styles.input} value={endDate} onChangeText={setEndDate}
-              placeholder="2026-04-10" placeholderTextColor={COLORS.textSecondary} keyboardType="numbers-and-punctuation" />
+            <TextInput
+              style={styles.input} value={endDate} onChangeText={setEndDate}
+              placeholder="2026-04-10" placeholderTextColor={COLORS.textSecondary}
+              keyboardType="numbers-and-punctuation"
+            />
 
             <Text style={styles.fieldLabel}>Motif</Text>
-            <TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+            <TextInput
+              style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
               value={reason} onChangeText={setReason}
               placeholder="Raison de votre demande..." placeholderTextColor={COLORS.textSecondary}
-              multiline numberOfLines={3} />
+              multiline numberOfLines={3}
+            />
 
-            <TouchableOpacity style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
-              onPress={handleSubmit} disabled={submitting}>
+            <TouchableOpacity
+              style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
+              onPress={handleSubmit} disabled={submitting}
+            >
               {submitting
                 ? <ActivityIndicator color={COLORS.white} />
                 : <><Ionicons name="send" size={16} color={COLORS.white} /><Text style={styles.submitBtnText}>Soumettre</Text></>
@@ -502,81 +363,58 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     padding: 20,
     marginBottom: 12,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22, shadowRadius: 8, elevation: 5,
   },
   greeting: { color: COLORS.white, fontSize: 22, fontWeight: 'bold' },
   date:     { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 4, textTransform: 'capitalize' },
   fonction: { color: 'rgba(255,255,255,0.55)', fontSize: 12, marginTop: 5 },
 
-  // ── Carte pleine largeur ──
+  // ── Carte ──
   card: {
     backgroundColor: COLORS.white,
     padding: 16,
+    marginHorizontal: 16,
     marginBottom: 12,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.07, shadowRadius: 4, elevation: 2,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  cardTitle:  { fontSize: 14, fontWeight: '700', color: COLORS.primary },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-  statusText:  { fontSize: 11, fontWeight: '700' },
+  cardTop:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  cardTitle: { fontSize: 14, fontWeight: '600', color: COLORS.text },
+
+  badge:     { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  badgeText: { fontSize: 11, fontWeight: '700' },
 
   // ── Pointage ──
-  ptBlock:   { gap: 10 },
-  ptRow:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  ptIconWrap: { width: 30, height: 30, borderRadius: 8, justifyContent: 'center', alignItems: 'center' },
-  ptLabel:   { fontSize: 14, color: COLORS.textSecondary, width: 50 },
-  ptValue:   { fontSize: 26, fontWeight: 'bold', letterSpacing: 1 },
-  ptDivider: { height: 1, backgroundColor: COLORS.border, marginVertical: 2 },
-  ptFooter:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 14 },
-  ptHintText: { fontSize: 11, color: COLORS.textSecondary },
+  timesRow:  { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  timeItem:  { flex: 1, alignItems: 'center' },
+  timeLabel: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 4 },
+  timeValue: { fontSize: 26, fontWeight: 'bold', letterSpacing: 1 },
+  timeSep:   { width: 1, height: 36, backgroundColor: COLORS.border },
+  hint:      { fontSize: 11, color: COLORS.textSecondary, textAlign: 'right' },
 
-  // ── Section header ──
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 10 },
-  sectionTitle:  { fontSize: 16, fontWeight: '700', color: COLORS.text },
-  requestBtn:    { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20 },
-  requestBtnText: { color: COLORS.white, fontSize: 13, fontWeight: '600' },
+  // ── Solde ──
+  balanceRow:   { flexDirection: 'row', alignItems: 'baseline' },
+  balanceValue: { fontSize: 32, fontWeight: 'bold', color: '#059669' },
+  balanceLabel: { fontSize: 14, color: COLORS.textSecondary },
+  seeMore:      { fontSize: 13, fontWeight: '600', color: COLORS.primary },
 
-  // ── Notification ──
-  notifCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: '#ECFDF5', padding: 12, marginHorizontal: 16, marginBottom: 12,
-    borderRadius: 12, borderWidth: 1, borderColor: '#A7F3D0',
-  },
-  notifTitle: { fontSize: 13, fontWeight: '700', color: '#059669' },
-  notifSub:   { fontSize: 12, color: '#065F46', marginTop: 1 },
-
-  // ── Soldes ──
-  soldesRow:      { flexDirection: 'row', marginBottom: 16 },
-  soldeCard:      { flex: 1, padding: 16, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  soldePrimary:   { backgroundColor: COLORS.primary },
-  soldeSecondary: { backgroundColor: COLORS.white, borderLeftWidth: 1, borderLeftColor: COLORS.border },
-  soldeLabelLight: { fontSize: 12, color: 'rgba(255,255,255,0.75)', textAlign: 'center' },
-  soldeLabelDark:  { fontSize: 12, color: COLORS.textSecondary, textAlign: 'center' },
-  soldeValueBig:   { fontSize: 38, fontWeight: 'bold', color: COLORS.white },
-  soldeLinkRow:    { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4 },
-  soldeLink:       { fontSize: 11, color: 'rgba(255,255,255,0.7)' },
-
-  // ── Hub accès rapides ──
-  subTitle: {
-    fontSize: 12, fontWeight: '700', color: COLORS.textSecondary,
+  // ── Accès rapides ──
+  sectionTitle: {
+    fontSize: 11, fontWeight: '700', color: COLORS.textSecondary,
     paddingHorizontal: 16, marginBottom: 10,
     textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  hubGrid: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 16 },
-  hubCard: {
-    flex: 1, backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    alignItems: 'flex-start', gap: 4,
+  grid:     { flexDirection: 'row', paddingHorizontal: 16, gap: 10 },
+  gridItem: {
+    flex: 1, backgroundColor: COLORS.white, borderRadius: 12, padding: 14,
+    alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
+    shadowOpacity: 0.06, shadowRadius: 3, elevation: 2,
   },
-  hubIconWrap: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  hubTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text },
-  hubSub:   { fontSize: 11, color: COLORS.textSecondary },
-  hubLink:  { fontSize: 11, fontWeight: '600', color: COLORS.primary, marginTop: 4 },
+  gridIcon:  { width: 50, height: 50, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+  gridLabel: { fontSize: 13, fontWeight: '700', color: COLORS.text, textAlign: 'center' },
+  gridSub:   { fontSize: 11, color: COLORS.textSecondary, textAlign: 'center', marginTop: 2 },
 
   // ── Modal ──
   modal: { flex: 1, backgroundColor: COLORS.background },
@@ -587,7 +425,6 @@ const styles = StyleSheet.create({
   modalTitle:   { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
   modalSub:     { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
   modalContent: { padding: 16, paddingBottom: 24 },
-  modalFooter:  { padding: 16, borderTopWidth: 1, borderTopColor: COLORS.border, backgroundColor: COLORS.white },
 
   // ── Rows pointage modal ──
   dayRow: {
@@ -609,19 +446,13 @@ const styles = StyleSheet.create({
   empty:     { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyText: { color: COLORS.textSecondary, fontSize: 15 },
 
-  exportBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 12, height: 50,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8,
-  },
-  exportBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '600' },
-
   // ── Formulaire congé ──
-  fieldLabel: { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 6, marginTop: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
-  chip:       { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border },
-  chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  chipText:   { fontSize: 13, fontWeight: '500', color: COLORS.textSecondary },
+  fieldLabel:     { fontSize: 12, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 6, marginTop: 16, textTransform: 'uppercase', letterSpacing: 0.5 },
+  chip:           { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border },
+  chipActive:     { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  chipText:       { fontSize: 13, fontWeight: '500', color: COLORS.textSecondary },
   chipTextActive: { color: COLORS.white },
-  input: { backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 15, color: COLORS.text },
+  input:          { backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12, padding: 14, fontSize: 15, color: COLORS.text },
   submitBtn: {
     backgroundColor: COLORS.primary, borderRadius: 12, height: 52,
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24,
