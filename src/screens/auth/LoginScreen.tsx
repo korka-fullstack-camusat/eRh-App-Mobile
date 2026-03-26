@@ -32,10 +32,24 @@ export default function LoginScreen() {
     try {
       await login({ username: username.trim(), password });
     } catch (error: any) {
+      // Réseau inaccessible
+      if (!error?.response) {
+        Alert.alert(
+          'Erreur réseau',
+          `Impossible de joindre le serveur.\n\nVérifiez que :\n• Votre téléphone est connecté au WiFi\n• L'URL du serveur est correcte\n\nServeur : ${process.env.EXPO_PUBLIC_API_URL || 'non configuré'}`
+        );
+        return;
+      }
+      // Erreur HTTP du serveur
+      const status = error.response.status;
+      const data = error.response.data;
       const msg =
-        error?.response?.data?.detail ||
-        error?.response?.data?.non_field_errors?.[0] ||
-        'Identifiants incorrects. Veuillez réessayer.';
+        data?.detail ||
+        data?.non_field_errors?.[0] ||
+        (status === 401 ? 'Identifiants incorrects.' :
+         status === 400 ? 'Données invalides.' :
+         status === 500 ? 'Erreur serveur. Contactez l\'administrateur.' :
+         `Erreur ${status}`);
       Alert.alert('Connexion échouée', msg);
     } finally {
       setLoading(false);
