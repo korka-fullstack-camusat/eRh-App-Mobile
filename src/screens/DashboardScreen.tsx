@@ -151,27 +151,37 @@ export default function DashboardScreen() {
           activeOpacity={0.75}
           onPress={() => navigation.navigate('AttendanceTab')}
         >
+          {/* Titre + flèche */}
           <View style={styles.pointageTop}>
             <View style={styles.pointageLeft}>
               <Ionicons name="finger-print-outline" size={18} color={COLORS.primary} />
               <Text style={styles.pointageTitle}>Pointage du jour</Text>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: `${pt.color}15` }]}>
-              <Ionicons name={pt.icon} size={14} color={pt.color} />
+            <Ionicons name="chevron-forward" size={18} color={COLORS.border} />
+          </View>
+
+          {/* Entrée → Sortie → Statut sur une seule ligne lisible */}
+          <View style={styles.pointageRow}>
+            <View style={styles.pointageField}>
+              <Text style={styles.pointageFieldLabel}>Entrée</Text>
+              <Text style={[styles.pointageFieldValue, { color: pt.entree !== '--:--' ? COLORS.success : COLORS.textSecondary }]}>
+                {pt.entree}
+              </Text>
+            </View>
+
+            <Ionicons name="arrow-forward" size={16} color={COLORS.border} />
+
+            <View style={styles.pointageField}>
+              <Text style={styles.pointageFieldLabel}>Sortie</Text>
+              <Text style={[styles.pointageFieldValue, { color: pt.sortie !== '--:--' ? COLORS.primary : COLORS.textSecondary }]}>
+                {pt.sortie}
+              </Text>
+            </View>
+
+            <View style={[styles.statusBadge, { backgroundColor: `${pt.color}15`, marginLeft: 'auto' as any }]}>
+              <Ionicons name={pt.icon} size={13} color={pt.color} />
               <Text style={[styles.statusBadgeText, { color: pt.color }]}>{pt.status}</Text>
             </View>
-          </View>
-          <View style={styles.pointageTimes}>
-            <View style={styles.timeItem}>
-              <Text style={styles.timeLabel}>Entrée</Text>
-              <Text style={[styles.timeValue, { color: COLORS.success }]}>{pt.entree}</Text>
-            </View>
-            <View style={styles.timeSeparator} />
-            <View style={styles.timeItem}>
-              <Text style={styles.timeLabel}>Sortie</Text>
-              <Text style={[styles.timeValue, { color: pt.sortie !== '--:--' ? COLORS.primary : COLORS.textSecondary }]}>{pt.sortie}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={COLORS.border} style={{ marginLeft: 'auto' }} />
           </View>
         </TouchableOpacity>
 
@@ -312,16 +322,15 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.border,
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 6, elevation: 2,
   },
-  pointageTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+  pointageTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   pointageLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   pointageTitle: { fontSize: 14, fontWeight: '700', color: COLORS.primary },
+  pointageRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  pointageField: {},
+  pointageFieldLabel: { fontSize: 11, color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2 },
+  pointageFieldValue: { fontSize: 20, fontWeight: 'bold' },
   statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
   statusBadgeText: { fontSize: 12, fontWeight: '700' },
-  pointageTimes: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  timeItem: { alignItems: 'center' },
-  timeLabel: { fontSize: 11, color: COLORS.textSecondary, marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.3 },
-  timeValue: { fontSize: 22, fontWeight: 'bold' },
-  timeSeparator: { width: 1, height: 32, backgroundColor: COLORS.border },
 
   // Congés
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
