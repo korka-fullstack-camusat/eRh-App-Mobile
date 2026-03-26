@@ -4,7 +4,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/theme';
-import CamusatLogo from '@/components/CamusatLogo';
 
 import DashboardScreen from '@/screens/DashboardScreen';
 import LeavesScreen from '@/screens/leaves/LeavesScreen';
@@ -26,14 +25,6 @@ export type ProfileStackParamList = {
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
-
-function HeaderLogo() {
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <CamusatLogo size={30} showText={true} textColor={COLORS.white} />
-    </View>
-  );
-}
 
 function ProfileStackNavigator() {
   return (
@@ -70,8 +61,8 @@ export default function MainNavigator() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
-          if (route.name === 'DashboardTab')  iconName = focused ? 'home'          : 'home-outline';
-          else if (route.name === 'LeavesTab')  iconName = focused ? 'calendar'      : 'calendar-outline';
+          if (route.name === 'DashboardTab')   iconName = focused ? 'home'          : 'home-outline';
+          else if (route.name === 'LeavesTab')   iconName = focused ? 'calendar'      : 'calendar-outline';
           else if (route.name === 'PayslipsTab') iconName = focused ? 'document-text' : 'document-text-outline';
           else if (route.name === 'ProfileTab')  iconName = focused ? 'person'        : 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
@@ -81,12 +72,12 @@ export default function MainNavigator() {
       <Tab.Screen
         name="DashboardTab"
         component={DashboardScreen}
-        options={{ title: 'Accueil', headerTitle: () => <HeaderLogo />, headerTitleAlign: 'center' }}
+        options={{ title: 'Accueil', headerShown: false }}
       />
       <Tab.Screen
         name="LeavesTab"
         component={LeavesScreen}
-        options={{ title: 'Congés', headerTitle: 'Mes congés' }}
+        options={{ title: 'Cong\u00e9s', headerTitle: 'Mes cong\u00e9s' }}
       />
       <Tab.Screen
         name="PayslipsTab"
