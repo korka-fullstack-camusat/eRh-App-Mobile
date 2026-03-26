@@ -7,7 +7,6 @@ import { COLORS } from '@/theme';
 import CamusatLogo from '@/components/CamusatLogo';
 
 import DashboardScreen from '@/screens/DashboardScreen';
-import AttendanceScreen from '@/screens/attendance/AttendanceScreen';
 import LeavesScreen from '@/screens/leaves/LeavesScreen';
 import PayslipsScreen from '@/screens/payslips/PayslipsScreen';
 import DossierScreen from '@/screens/dossier/DossierScreen';
@@ -17,46 +16,37 @@ export type RootTabParamList = {
   DashboardTab: undefined;
   LeavesTab: undefined;
   PayslipsTab: undefined;
-  DossierTab: undefined;
-  AttendanceTab: undefined;
+  ProfileTab: undefined;
 };
 
-export type DossierStackParamList = {
-  DossierMain: undefined;
+export type ProfileStackParamList = {
+  ProfileMain: undefined;
   ChangePassword: undefined;
 };
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
-const DossierStack = createNativeStackNavigator<DossierStackParamList>();
+const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 function HeaderLogo() {
   return (
     <View style={{ paddingLeft: 4 }}>
-      <CamusatLogo size={28} showText={true} textColor={COLORS.white} />
+      <CamusatLogo size={26} showText={true} textColor={COLORS.white} />
     </View>
   );
 }
 
-function DossierStackNavigator() {
+function ProfileStackNavigator() {
   return (
-    <DossierStack.Navigator
+    <ProfileStack.Navigator
       screenOptions={{
         headerStyle: { backgroundColor: COLORS.primary },
         headerTintColor: COLORS.white,
         headerTitleStyle: { fontWeight: 'bold' },
       }}
     >
-      <DossierStack.Screen
-        name="DossierMain"
-        component={DossierScreen}
-        options={{ title: 'Mon dossier' }}
-      />
-      <DossierStack.Screen
-        name="ChangePassword"
-        component={ChangePasswordScreen}
-        options={{ title: 'Changer le mot de passe' }}
-      />
-    </DossierStack.Navigator>
+      <ProfileStack.Screen name="ProfileMain" component={DossierScreen} options={{ title: 'Mon profil' }} />
+      <ProfileStack.Screen name="ChangePassword" component={ChangePasswordScreen} options={{ title: 'Changer le mot de passe' }} />
+    </ProfileStack.Navigator>
   );
 }
 
@@ -79,17 +69,10 @@ export default function MainNavigator() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
-          if (route.name === 'DashboardTab') {
-            iconName = focused ? 'home' : 'home-outline';
-          } else if (route.name === 'LeavesTab') {
-            iconName = focused ? 'calendar' : 'calendar-outline';
-          } else if (route.name === 'PayslipsTab') {
-            iconName = focused ? 'document-text' : 'document-text-outline';
-          } else if (route.name === 'DossierTab') {
-            iconName = focused ? 'person' : 'person-outline';
-          } else if (route.name === 'AttendanceTab') {
-            iconName = focused ? 'time' : 'time-outline';
-          }
+          if (route.name === 'DashboardTab')  iconName = focused ? 'home'          : 'home-outline';
+          else if (route.name === 'LeavesTab')  iconName = focused ? 'calendar'      : 'calendar-outline';
+          else if (route.name === 'PayslipsTab') iconName = focused ? 'document-text' : 'document-text-outline';
+          else if (route.name === 'ProfileTab')  iconName = focused ? 'person'        : 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
@@ -97,10 +80,7 @@ export default function MainNavigator() {
       <Tab.Screen
         name="DashboardTab"
         component={DashboardScreen}
-        options={{
-          title: 'Accueil',
-          headerTitle: () => <HeaderLogo />,
-        }}
+        options={{ title: 'Accueil', headerTitle: () => <HeaderLogo /> }}
       />
       <Tab.Screen
         name="LeavesTab"
@@ -113,14 +93,9 @@ export default function MainNavigator() {
         options={{ title: 'Bulletins', headerTitle: 'Mes bulletins' }}
       />
       <Tab.Screen
-        name="DossierTab"
-        component={DossierStackNavigator}
-        options={{ title: 'Dossier', headerShown: false }}
-      />
-      <Tab.Screen
-        name="AttendanceTab"
-        component={AttendanceScreen}
-        options={{ title: 'Présences', headerTitle: 'Mes présences' }}
+        name="ProfileTab"
+        component={ProfileStackNavigator}
+        options={{ title: 'Profil', headerShown: false }}
       />
     </Tab.Navigator>
   );
