@@ -4,7 +4,7 @@ import {
   TouchableOpacity, ActivityIndicator, Modal, TextInput,
   Alert, Animated, Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,6 +52,7 @@ function getInitials(firstName?: string, lastName?: string): string {
 }
 
 export default function DashboardScreen() {
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { employee, isLoading: empLoading } = useEmployee();
   const navigation = useNavigation<any>();
@@ -321,16 +322,11 @@ export default function DashboardScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ══════════════════════════════════════════
-            HEADER - Dark navy blue banner
-        ══════════════════════════════════════════ */}
-        <Animated.View style={[styles.header, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      {/* ══════════════════════════════════════════
+          HEADER — fixe, couvre la status bar
+      ══════════════════════════════════════════ */}
+      <Animated.View style={[styles.header, { paddingTop: insets.top + 14, opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
           {/* Top row: Logo + Avatar */}
           <View style={styles.headerTopRow}>
             <View style={styles.logoRow}>
@@ -360,8 +356,17 @@ export default function DashboardScreen() {
               </Text>
             </View>
           )}
-        </Animated.View>
+      </Animated.View>
 
+      {/* ══════════════════════════════════════════
+          CONTENU SCROLLABLE
+      ══════════════════════════════════════════ */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+        showsVerticalScrollIndicator={false}
+      >
         {/* ══════════════════════════════════════════
             POINTAGE DU JOUR
         ══════════════════════════════════════════ */}
@@ -636,18 +641,16 @@ export default function DashboardScreen() {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: COLORS.primary },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  scrollView: { flex: 1, backgroundColor: COLORS.background },
   scroll: { paddingBottom: 30 },
 
   // ── Header ──
   header: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
-    paddingTop: 16,
     paddingBottom: 24,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
   },
   headerTopRow: {
     flexDirection: 'row',
