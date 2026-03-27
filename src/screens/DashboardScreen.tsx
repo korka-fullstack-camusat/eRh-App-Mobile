@@ -670,7 +670,7 @@ export default function DashboardScreen() {
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.primary },
+  container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollView: { flex: 1, backgroundColor: COLORS.background },
   scroll: { paddingBottom: 30 },
