@@ -15,6 +15,7 @@ import type { LeaveRequest, LeaveBalance, LeaveType, LeaveStatus } from '@/types
 import { COLORS } from '@/theme';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import * as DocumentPicker from 'expo-document-picker';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
   PENDING:        { label: 'En attente N+1', color: '#F59E0B', icon: 'time-outline' },
@@ -54,9 +55,11 @@ export default function LeavesScreen() {
   // Create modal
   const [showForm, setShowForm] = useState(false);
   const [selectedType, setSelectedType] = useState<number | null>(null);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [reason, setReason] = useState('');
+  const [justificationFile, setJustificationFile] = useState<{ uri: string; name: string; mimeType?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
@@ -99,9 +102,10 @@ export default function LeavesScreen() {
       await createLeaveRequest({
         employee: employee.id, leave_type: selectedType,
         start_date: startDate, end_date: endDate, reason,
+        justification: justificationFile ?? undefined,
       });
       setShowForm(false);
-      setSelectedType(null); setStartDate(''); setEndDate(''); setReason('');
+      setSelectedType(null); setStartDate(''); setEndDate(''); setReason(''); setJustificationFile(null);
       await load();
       Alert.alert('Succès', 'Demande de congé soumise avec succès.');
     } catch (e: any) {
@@ -128,6 +132,33 @@ export default function LeavesScreen() {
         },
       },
     ]);
+  };
+
+  // Auto-format date as user types: AAAA-MM-JJ
+  const handleDateInput = (text: string, setter: (v: string) => void) => {
+    const digits = text.replace(/\D/g, '').slice(0, 8);
+    let out = digits;
+    if (digits.length > 4) out = digits.slice(0, 4) + '-' + digits.slice(4);
+    if (digits.length > 6) out = digits.slice(0, 4) + '-' + digits.slice(4, 6) + '-' + digits.slice(6);
+    setter(out);
+  };
+
+  const handlePickDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/*', 'application/pdf'],
+        copyToCacheDirectory: true,
+      });
+      if (!result.canceled && result.assets?.[0]) {
+        setJustificationFile({
+          uri: result.assets[0].uri,
+          name: result.assets[0].name,
+          mimeType: result.assets[0].mimeType ?? 'application/octet-stream',
+        });
+      }
+    } catch {
+      Alert.alert('Erreur', 'Impossible de sélectionner le fichier.');
+    }
   };
 
   const getStatusCfg = (status: string) =>
@@ -241,6 +272,15 @@ export default function LeavesScreen() {
     );
   };
 
+  // Filter balances: show only annual leave ("Congé annuel / CP / CA")
+  const annualBalances = balances.filter(b =>
+    (b.leave_type_code || '').toUpperCase() === 'CA' ||
+    (b.leave_type_code || '').toUpperCase() === 'CP' ||
+    (b.leave_type_name || '').toLowerCase().includes('annuel') ||
+    (b.leave_type_name || '').toLowerCase().includes('congés payés')
+  );
+  const displayedBalances = annualBalances.length > 0 ? annualBalances : balances;
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       {/* Tabs */}
@@ -270,7 +310,7 @@ export default function LeavesScreen() {
         <ActivityIndicator style={{ flex: 1 }} color={COLORS.primary} />
       ) : (
         <FlatList
-          data={tab === 'requests' ? requests : balances}
+          data={tab === 'requests' ? requests : displayedBalances}
           keyExtractor={(item) => String(item.id)}
           renderItem={tab === 'requests' ? renderRequest : renderBalance as any}
           contentContainerStyle={styles.list}
@@ -365,49 +405,81 @@ export default function LeavesScreen() {
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Nouvelle demande de congé</Text>
-            <TouchableOpacity onPress={() => setShowForm(false)}>
+            <TouchableOpacity onPress={() => { setShowForm(false); setJustificationFile(null); }}>
               <Ionicons name="close" size={24} color={COLORS.text} />
             </TouchableOpacity>
           </View>
+
           <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
+
+            {/* ── Type de congé (dropdown) ── */}
             <Text style={styles.fieldLabel}>Type de congé *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }}>
-              {leaveTypes.map(lt => (
-                <TouchableOpacity
-                  key={lt.id}
-                  style={[styles.typeChip, selectedType === lt.id && styles.typeChipActive]}
-                  onPress={() => setSelectedType(lt.id)}
-                >
-                  <Text style={[styles.typeChipText, selectedType === lt.id && styles.typeChipTextActive]}>
-                    {lt.label || lt.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <TouchableOpacity style={styles.dropdownBtn} onPress={() => setShowTypeDropdown(true)} activeOpacity={0.7}>
+              <Text style={selectedType ? styles.dropdownBtnText : styles.dropdownBtnPlaceholder}>
+                {selectedType
+                  ? (leaveTypes.find(lt => lt.id === selectedType)?.label ?? leaveTypes.find(lt => lt.id === selectedType)?.name ?? 'Type sélectionné')
+                  : 'Sélectionner un type de congé...'}
+              </Text>
+              <Ionicons name="chevron-down" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
 
-            <Text style={styles.fieldLabel}>Date de début * (AAAA-MM-JJ)</Text>
-            <TextInput
-              style={styles.input}
-              value={startDate} onChangeText={setStartDate}
-              placeholder="2026-04-01" placeholderTextColor={COLORS.textSecondary}
-              keyboardType="numbers-and-punctuation"
-            />
+            {/* ── Date de début ── */}
+            <Text style={styles.fieldLabel}>Date de début *</Text>
+            <View style={styles.inputRow}>
+              <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                value={startDate}
+                onChangeText={t => handleDateInput(t, setStartDate)}
+                placeholder="AAAA-MM-JJ"
+                placeholderTextColor={COLORS.textSecondary}
+                keyboardType="numeric"
+                maxLength={10}
+              />
+            </View>
 
-            <Text style={styles.fieldLabel}>Date de fin * (AAAA-MM-JJ)</Text>
-            <TextInput
-              style={styles.input}
-              value={endDate} onChangeText={setEndDate}
-              placeholder="2026-04-10" placeholderTextColor={COLORS.textSecondary}
-              keyboardType="numbers-and-punctuation"
-            />
+            {/* ── Date de fin ── */}
+            <Text style={styles.fieldLabel}>Date de fin *</Text>
+            <View style={styles.inputRow}>
+              <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} style={styles.inputIcon} />
+              <TextInput
+                style={styles.inputWithIcon}
+                value={endDate}
+                onChangeText={t => handleDateInput(t, setEndDate)}
+                placeholder="AAAA-MM-JJ"
+                placeholderTextColor={COLORS.textSecondary}
+                keyboardType="numeric"
+                maxLength={10}
+              />
+            </View>
 
-            <Text style={styles.fieldLabel}>Motif</Text>
+            {/* ── Motif ── */}
+            <Text style={styles.fieldLabel}>Motif (optionnel)</Text>
             <TextInput
               style={[styles.input, styles.textarea]}
               value={reason} onChangeText={setReason}
-              placeholder="Raison de votre demande..." placeholderTextColor={COLORS.textSecondary}
+              placeholder="Décrivez brièvement la raison de votre congé..."
+              placeholderTextColor={COLORS.textSecondary}
               multiline numberOfLines={3}
             />
+
+            {/* ── Justification (optionnel) ── */}
+            <Text style={styles.fieldLabel}>Justificatif <Text style={styles.optionalTag}>(optionnel)</Text></Text>
+            <TouchableOpacity style={styles.uploadBtn} onPress={handlePickDocument} activeOpacity={0.7}>
+              <View style={styles.uploadBtnLeft}>
+                <Ionicons name="attach-outline" size={20} color={justificationFile ? COLORS.primary : COLORS.textSecondary} />
+                <Text style={[styles.uploadBtnText, justificationFile && { color: COLORS.primary }]} numberOfLines={1}>
+                  {justificationFile ? justificationFile.name : 'Joindre un fichier (PDF, photo)'}
+                </Text>
+              </View>
+              {justificationFile ? (
+                <TouchableOpacity onPress={() => setJustificationFile(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={20} color={COLORS.danger} />
+                </TouchableOpacity>
+              ) : (
+                <Ionicons name="cloud-upload-outline" size={18} color={COLORS.textSecondary} />
+              )}
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.submitBtn, submitting && { opacity: 0.7 }]}
@@ -415,11 +487,44 @@ export default function LeavesScreen() {
             >
               {submitting
                 ? <ActivityIndicator color={COLORS.white} />
-                : <><Ionicons name="send" size={18} color={COLORS.white} /><Text style={styles.submitBtnText}>Soumettre</Text></>
+                : <><Ionicons name="send" size={18} color={COLORS.white} /><Text style={styles.submitBtnText}>Soumettre la demande</Text></>
               }
             </TouchableOpacity>
           </ScrollView>
         </SafeAreaView>
+      </Modal>
+
+      {/* Dropdown type de congé */}
+      <Modal visible={showTypeDropdown} transparent animationType="fade">
+        <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={() => setShowTypeDropdown(false)}>
+          <View style={styles.dropdownMenu}>
+            <View style={styles.dropdownMenuHeader}>
+              <Text style={styles.dropdownMenuTitle}>Choisir un type de congé</Text>
+              <TouchableOpacity onPress={() => setShowTypeDropdown(false)}>
+                <Ionicons name="close" size={22} color={COLORS.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView bounces={false}>
+              {leaveTypes.map(lt => (
+                <TouchableOpacity
+                  key={lt.id}
+                  style={[styles.dropdownItem, selectedType === lt.id && styles.dropdownItemActive]}
+                  onPress={() => { setSelectedType(lt.id); setShowTypeDropdown(false); }}
+                >
+                  <View style={styles.dropdownItemLeft}>
+                    <View style={[styles.radioOuter, selectedType === lt.id && { borderColor: COLORS.primary }]}>
+                      {selectedType === lt.id && <View style={styles.radioInner} />}
+                    </View>
+                    <Text style={[styles.dropdownItemText, selectedType === lt.id && { color: COLORS.primary, fontWeight: '700' }]}>
+                      {lt.label || lt.name}
+                    </Text>
+                  </View>
+                  {selectedType === lt.id && <Ionicons name="checkmark" size={18} color={COLORS.primary} />}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </SafeAreaView>
   );
@@ -543,23 +648,73 @@ const styles = StyleSheet.create({
   modalContent: { padding: 16, paddingBottom: 40 },
   fieldLabel: {
     fontSize: 12, fontWeight: '700', color: COLORS.textSecondary,
-    marginBottom: 6, marginTop: 14, textTransform: 'uppercase', letterSpacing: 0.5,
+    marginBottom: 6, marginTop: 18, textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  typeChip: {
-    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, marginRight: 8,
+  optionalTag: { fontSize: 11, fontWeight: '400', color: COLORS.textSecondary, textTransform: 'none' },
+
+  // Dropdown button
+  dropdownBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border,
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 15,
   },
-  typeChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  typeChipText: { fontSize: 13, fontWeight: '500', color: COLORS.textSecondary },
-  typeChipTextActive: { color: COLORS.white },
+  dropdownBtnText: { fontSize: 15, color: COLORS.text, flex: 1 },
+  dropdownBtnPlaceholder: { fontSize: 15, color: COLORS.textSecondary, flex: 1 },
+
+  // Dropdown overlay + menu
+  dropdownOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end',
+  },
+  dropdownMenu: {
+    backgroundColor: COLORS.white, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    maxHeight: '70%', paddingBottom: 24,
+  },
+  dropdownMenuHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  dropdownMenuTitle: { fontSize: 16, fontWeight: '700', color: COLORS.text },
+  dropdownItem: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 14, paddingHorizontal: 16,
+    borderBottomWidth: 1, borderBottomColor: COLORS.background,
+  },
+  dropdownItemActive: { backgroundColor: '#EFF6FF' },
+  dropdownItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  dropdownItemText: { fontSize: 15, color: COLORS.text },
+  radioOuter: {
+    width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+    borderColor: COLORS.border, justifyContent: 'center', alignItems: 'center',
+  },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: COLORS.primary },
+
+  // Date input with icon
+  inputRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border,
+    borderRadius: 12, paddingHorizontal: 14,
+  },
+  inputIcon: { marginRight: 10 },
+  inputWithIcon: { flex: 1, paddingVertical: 14, fontSize: 15, color: COLORS.text },
+
   input: {
     backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border,
     borderRadius: 12, padding: 14, fontSize: 15, color: COLORS.text,
   },
-  textarea: { height: 80, textAlignVertical: 'top' },
+  textarea: { height: 88, textAlignVertical: 'top' },
+
+  // Upload button
+  uploadBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border,
+    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, borderStyle: 'dashed',
+  },
+  uploadBtnLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  uploadBtnText: { fontSize: 14, color: COLORS.textSecondary, flex: 1 },
+
   submitBtn: {
-    backgroundColor: COLORS.primary, borderRadius: 12, height: 52,
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24,
+    backgroundColor: COLORS.primary, borderRadius: 12, height: 54,
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 28,
   },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
 });
