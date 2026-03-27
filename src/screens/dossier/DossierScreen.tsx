@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity,
+  View, Text, ScrollView, StyleSheet, ActivityIndicator, TouchableOpacity, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +40,7 @@ export default function DossierScreen() {
   const { employee, isLoading } = useEmployee();
   const { user, logout } = useAuth();
   const navigation = useNavigation<any>();
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   if (isLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
@@ -108,7 +109,7 @@ export default function DossierScreen() {
 
           <TouchableOpacity
             style={[styles.btn, styles.btnRed]}
-            onPress={() => logout()}
+            onPress={() => setShowLogoutModal(true)}
             activeOpacity={0.85}
           >
             <Ionicons name="log-out-outline" size={18} color={COLORS.white} />
@@ -117,6 +118,28 @@ export default function DossierScreen() {
         </View>
 
       </ScrollView>
+
+      {/* ── Modal déconnexion ── */}
+      <Modal visible={showLogoutModal} transparent animationType="fade" onRequestClose={() => setShowLogoutModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalIconWrap}>
+              <Ionicons name="log-out-outline" size={32} color={COLORS.danger} />
+            </View>
+            <Text style={styles.modalTitle}>Déconnexion</Text>
+            <Text style={styles.modalMessage}>Êtes-vous sûr de vouloir vous déconnecter ?</Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setShowLogoutModal(false)} activeOpacity={0.8}>
+                <Text style={styles.modalBtnCancelText}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnConfirm]} onPress={() => { setShowLogoutModal(false); logout(); }} activeOpacity={0.8}>
+                <Text style={styles.modalBtnConfirmText}>Déconnecter</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -192,4 +215,29 @@ const styles = StyleSheet.create({
   btnBlue: { backgroundColor: COLORS.primary, shadowColor: COLORS.primary },
   btnRed:  { backgroundColor: COLORS.danger,  shadowColor: COLORS.danger  },
   btnText: { fontSize: 14, fontWeight: '700', color: COLORS.white },
+
+  // ── Modal ──
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center', alignItems: 'center', padding: 32,
+  },
+  modalBox: {
+    backgroundColor: COLORS.white, borderRadius: 20,
+    padding: 28, width: '100%', alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15, shadowRadius: 20, elevation: 10,
+  },
+  modalIconWrap: {
+    width: 60, height: 60, borderRadius: 30,
+    backgroundColor: `${COLORS.danger}12`,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 14,
+  },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: COLORS.text, marginBottom: 8 },
+  modalMessage: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
+  modalBtns: { flexDirection: 'row', gap: 10, width: '100%' },
+  modalBtn: { flex: 1, paddingVertical: 13, borderRadius: 12, alignItems: 'center' },
+  modalBtnCancel: { backgroundColor: COLORS.background },
+  modalBtnConfirm: { backgroundColor: COLORS.danger },
+  modalBtnCancelText: { fontSize: 14, fontWeight: '600', color: COLORS.text },
+  modalBtnConfirmText: { fontSize: 14, fontWeight: '700', color: COLORS.white },
 });
