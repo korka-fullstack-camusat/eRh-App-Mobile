@@ -20,8 +20,10 @@ import { COLORS } from '@/theme';
 import CamusatLogo from '@/components/CamusatLogo';
 import {
   format, startOfMonth, endOfMonth,
-  startOfWeek, endOfWeek,
+  startOfWeek, endOfWeek, addWeeks, subWeeks,
 } from 'date-fns';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { fr } from 'date-fns/locale';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 
@@ -59,6 +61,12 @@ export default function DashboardScreen() {
   const [allLeaves, setAllLeaves] = useState<LeaveRequest[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Weekly modal states
+  const [modalWeekStart, setModalWeekStart] = useState<Date>(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [modalWeekDays, setModalWeekDays] = useState<EmployeePeriodDetailDay[]>([]);
+  const [modalWeekLoading, setModalWeekLoading] = useState(false);
+  const [exportingWeek, setExportingWeek] = useState(false);
 
   // Modal states
   const [showPtModal, setShowPtModal] = useState(false);
@@ -137,6 +145,96 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, [loadData]);
 
+  const loadWeekData = useCallback(async (weekStart: Date) => {
+    if (!employee) return;
+    setModalWeekLoading(true);
+    try {
+      const start = format(weekStart, 'yyyy-MM-dd');
+      const end = format(endOfWeek(weekStart, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+      const result = await getMyAttendance({ employee_id: employee.id, start, end });
+      setModalWeekDays(result.days ?? []);
+    } catch {
+      setModalWeekDays([]);
+    } finally {
+      setModalWeekLoading(false);
+    }
+  }, [employee]);
+
+  const handleOpenPtModal = () => {
+    const currentWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+    setModalWeekStart(currentWeekStart);
+    loadWeekData(currentWeekStart);
+    setShowPtModal(true);
+  };
+
+  const handleModalWeekChange = (direction: 'prev' | 'next') => {
+    setModalWeekStart(prev => {
+      const next = direction === 'prev' ? subWeeks(prev, 1) : addWeeks(prev, 1);
+      loadWeekData(next);
+      return next;
+    });
+  };
+
+  const handleExportWeekPDF = async () => {
+    if (modalWeekDays.length === 0) {
+      Alert.alert('Export', 'Aucune donnée à exporter.');
+      return;
+    }
+    setExportingWeek(true);
+    try {
+      const employeeName = employee ? `${employee.prenom} ${employee.nom}` : 'Employé';
+      const modalWeekEnd = endOfWeek(modalWeekStart, { weekStartsOn: 1 });
+      const weekLabel = `${format(modalWeekStart, 'd MMM', { locale: fr })} — ${format(modalWeekEnd, 'd MMM yyyy', { locale: fr })}`;
+      const statusCfgMap: Record<string, { label: string; color: string; bg: string }> = {
+        ok:         { label: 'Présent',   color: '#16A34A', bg: '#DCFCE7' },
+        present:    { label: 'Présent',   color: '#16A34A', bg: '#DCFCE7' },
+        absent:     { label: 'Absent',    color: '#DC2626', bg: '#FEE2E2' },
+        incomplete: { label: 'Incomplet', color: '#D97706', bg: '#FEF3C7' },
+        anomaly:    { label: 'Anomalie',  color: '#4F46E5', bg: '#EEF2FF' },
+      };
+      const rows = modalWeekDays.map(d => {
+        const cfg = statusCfgMap[d.status] ?? statusCfgMap.absent;
+        const minToTime = (min?: number | null) => {
+          if (!min && min !== 0) return '--:--';
+          const h = Math.floor(Math.abs(min) / 60);
+          const m = Math.abs(min) % 60;
+          return `${String(h).padStart(2, '0')}h${String(m).padStart(2, '0')}`;
+        };
+        return `<tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;">${format(new Date(d.date), 'EEE', { locale: fr }).toUpperCase()}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;">${format(new Date(d.date), 'd MMM yyyy', { locale: fr })}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;"><span style="background:${cfg.bg};color:${cfg.color};padding:2px 10px;border-radius:12px;font-size:11px;font-weight:600;">${cfg.label}</span></td>
+          <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;">${d.in_time ?? '--:--'}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;">${d.out_time ?? '--:--'}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;">${minToTime(d.worked_minutes)}</td>
+        </tr>`;
+      }).join('');
+      const html = `<html><head><meta charset="utf-8"/><style>
+        body{font-family:-apple-system,sans-serif;margin:0;padding:20px;color:#1A1A2E;}
+        .header{background:#003C71;color:white;padding:20px;border-radius:8px;margin-bottom:20px;}
+        .header h1{margin:0;font-size:20px;}.header p{margin:4px 0 0;opacity:.8;font-size:13px;}
+        table{width:100%;border-collapse:collapse;font-size:12px;}
+        th{background:#F5F7FA;padding:10px 12px;text-align:left;font-weight:600;color:#6C757D;text-transform:uppercase;font-size:10px;letter-spacing:.5px;}
+        .footer{margin-top:20px;text-align:center;color:#6C757D;font-size:10px;border-top:1px solid #E2E8F0;padding-top:10px;}
+      </style></head><body>
+        <div class="header">
+          <h1>Pointage hebdomadaire — CAMUSAT</h1>
+          <p>${employeeName} • ${employee?.matricule ?? ''} • ${employee?.service ?? ''}</p>
+          <p>Semaine : ${weekLabel}</p>
+        </div>
+        <table><thead><tr><th>Jour</th><th>Date</th><th>Statut</th><th>Entrée</th><th>Sortie</th><th>Durée</th></tr></thead>
+        <tbody>${rows}</tbody></table>
+        <div class="footer">Document confidentiel — CAMUSAT eRH — Généré le ${format(new Date(), 'd MMMM yyyy à HH:mm', { locale: fr })}</div>
+      </body></html>`;
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
+    } catch {
+      Alert.alert('Erreur', 'Impossible de générer le PDF.');
+    } finally {
+      setExportingWeek(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!employee || !selType || !startDate || !endDate) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires.');
@@ -201,11 +299,11 @@ export default function DashboardScreen() {
   if (cpBalance) {
     remainingDays = Math.round(cpBalance.remaining_days ?? cpBalance.remaining ?? 0);
     usedDays = Math.round(cpBalance.used_days ?? cpBalance.taken ?? 0);
-    totalDays = Math.round(cpBalance.total_days ?? ((cpBalance.acquired ?? 0) + (cpBalance.adjusted ?? 0)));
+    totalDays = Math.round(cpBalance.total_days ?? (cpBalance.acquired ?? 0));
   } else if (balances.length > 0) {
     remainingDays = Math.round(balances.reduce((s, b) => s + (b.remaining_days ?? b.remaining ?? 0), 0));
     usedDays = Math.round(balances.reduce((s, b) => s + (b.used_days ?? b.taken ?? 0), 0));
-    totalDays = Math.round(balances.reduce((s, b) => s + (b.total_days ?? (b.acquired ?? 0) + (b.adjusted ?? 0)), 0));
+    totalDays = Math.round(balances.reduce((s, b) => s + (b.total_days ?? (b.acquired ?? 0)), 0));
   }
   const progressPct = totalDays > 0 ? remainingDays / totalDays : 0;
 
@@ -311,7 +409,7 @@ export default function DashboardScreen() {
           {/* Footer */}
           <View style={styles.ptFooterRow}>
             <Text style={styles.ptDurationText}>Durée travaillée : {workedDuration}</Text>
-            <TouchableOpacity onPress={() => setShowPtModal(true)} style={styles.ptWeekLink}>
+            <TouchableOpacity onPress={handleOpenPtModal} style={styles.ptWeekLink}>
               <Text style={styles.ptWeekLinkText}>Voir la semaine →</Text>
             </TouchableOpacity>
           </View>
@@ -409,26 +507,56 @@ export default function DashboardScreen() {
       ══════════════════════════════════════════ */}
       <Modal visible={showPtModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
+          {/* Header: title + close */}
           <View style={styles.modalHeader}>
-            <View>
-              <Text style={styles.modalTitle}>Pointage de la semaine</Text>
-              <Text style={styles.modalSub}>
-                {format(weekStart, 'd MMM', { locale: fr })} — {format(weekEnd, 'd MMM yyyy', { locale: fr })}
-              </Text>
-            </View>
+            <Text style={styles.modalTitle}>Pointage de la semaine</Text>
             <TouchableOpacity onPress={() => setShowPtModal(false)}>
               <Ionicons name="close" size={24} color={COLORS.text} />
             </TouchableOpacity>
           </View>
 
+          {/* Week navigation row */}
+          <View style={styles.weekNavRow}>
+            <TouchableOpacity style={styles.weekNavBtn} onPress={() => handleModalWeekChange('prev')}>
+              <Ionicons name="chevron-back" size={20} color={COLORS.primary} />
+            </TouchableOpacity>
+            <Text style={styles.weekNavLabel}>
+              {format(modalWeekStart, 'd MMM', { locale: fr })} — {format(endOfWeek(modalWeekStart, { weekStartsOn: 1 }), 'd MMM yyyy', { locale: fr })}
+            </Text>
+            <TouchableOpacity
+              style={styles.weekNavBtn}
+              onPress={() => handleModalWeekChange('next')}
+              disabled={format(modalWeekStart, 'yyyy-MM-dd') >= format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd')}
+            >
+              <Ionicons
+                name="chevron-forward" size={20}
+                color={format(modalWeekStart, 'yyyy-MM-dd') >= format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd') ? COLORS.border : COLORS.primary}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* PDF export button */}
+          <TouchableOpacity style={styles.weekExportBtn} onPress={handleExportWeekPDF} disabled={exportingWeek}>
+            {exportingWeek ? (
+              <ActivityIndicator size="small" color={COLORS.white} />
+            ) : (
+              <>
+                <Ionicons name="download-outline" size={15} color={COLORS.white} />
+                <Text style={styles.weekExportBtnText}>Télécharger en PDF</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
           <ScrollView contentContainerStyle={styles.modalContent}>
-            {weekDays.length === 0 ? (
+            {modalWeekLoading ? (
+              <ActivityIndicator style={{ paddingTop: 40 }} color={COLORS.primary} />
+            ) : modalWeekDays.length === 0 ? (
               <View style={styles.empty}>
                 <Ionicons name="time-outline" size={48} color={COLORS.border} />
                 <Text style={styles.emptyText}>Aucune donnée cette semaine</Text>
               </View>
             ) : (
-              weekDays.map((day, i) => {
+              modalWeekDays.map((day, i) => {
                 const statusCfg: Record<string, { label: string; color: string; bg: string }> = {
                   ok: { label: 'Présent', color: COLORS.success, bg: '#DCFCE7' },
                   present: { label: 'Présent', color: COLORS.success, bg: '#DCFCE7' },
@@ -822,6 +950,21 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
   modalSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
   modalContent: { padding: 16, paddingBottom: 24 },
+
+  // ── Week navigation ──
+  weekNavRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 8, paddingVertical: 10,
+    backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  weekNavBtn: { padding: 8 },
+  weekNavLabel: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  weekExportBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: COLORS.primary, marginHorizontal: 16, marginVertical: 10,
+    borderRadius: 10, paddingVertical: 10,
+  },
+  weekExportBtnText: { color: COLORS.white, fontSize: 13, fontWeight: '600' },
 
   // ── Week modal rows ──
   dayRow: {
