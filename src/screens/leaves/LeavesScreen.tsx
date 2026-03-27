@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, FlatList, StyleSheet, TouchableOpacity,
   ActivityIndicator, RefreshControl, Modal, TextInput,
@@ -56,11 +56,22 @@ export default function LeavesScreen() {
   const [showForm, setShowForm] = useState(false);
   const [selectedType, setSelectedType] = useState<number | null>(null);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDay, setStartDay] = useState('');
+  const [startMonth, setStartMonth] = useState('');
+  const [startYear, setStartYear] = useState('');
+  const [endDay, setEndDay] = useState('');
+  const [endMonth, setEndMonth] = useState('');
+  const [endYear, setEndYear] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [reason, setReason] = useState('');
   const [justificationFile, setJustificationFile] = useState<{ uri: string; name: string; mimeType?: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const startMonthRef = useRef<TextInput>(null);
+  const startYearRef = useRef<TextInput>(null);
+  const endDayRef = useRef<TextInput>(null);
+  const endMonthRef = useRef<TextInput>(null);
+  const endYearRef = useRef<TextInput>(null);
 
   const load = useCallback(async () => {
     if (!employee) return;
@@ -88,13 +99,14 @@ export default function LeavesScreen() {
   }, [load]);
 
   const handleSubmit = async () => {
+    const startDate = startYear && startMonth && startDay
+      ? `${startYear}-${startMonth.padStart(2, '0')}-${startDay.padStart(2, '0')}`
+      : '';
+    const endDate = endYear && endMonth && endDay
+      ? `${endYear}-${endMonth.padStart(2, '0')}-${endDay.padStart(2, '0')}`
+      : '';
     if (!employee || !selectedType || !startDate || !endDate) {
       Alert.alert('Erreur', 'Veuillez remplir tous les champs obligatoires.');
-      return;
-    }
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(startDate) || !dateRegex.test(endDate)) {
-      Alert.alert('Erreur', 'Format de date invalide. Utilisez AAAA-MM-JJ.');
       return;
     }
     setSubmitting(true);
@@ -105,7 +117,10 @@ export default function LeavesScreen() {
         justification: justificationFile ?? undefined,
       });
       setShowForm(false);
-      setSelectedType(null); setStartDate(''); setEndDate(''); setReason(''); setJustificationFile(null);
+      setSelectedType(null);
+      setStartDay(''); setStartMonth(''); setStartYear('');
+      setEndDay(''); setEndMonth(''); setEndYear('');
+      setReason(''); setJustificationFile(null);
       await load();
       Alert.alert('Succès', 'Demande de congé soumise avec succès.');
     } catch (e: any) {
@@ -132,15 +147,6 @@ export default function LeavesScreen() {
         },
       },
     ]);
-  };
-
-  // Auto-format date as user types: AAAA-MM-JJ
-  const handleDateInput = (text: string, setter: (v: string) => void) => {
-    const digits = text.replace(/\D/g, '').slice(0, 8);
-    let out = digits;
-    if (digits.length > 4) out = digits.slice(0, 4) + '-' + digits.slice(4);
-    if (digits.length > 6) out = digits.slice(0, 4) + '-' + digits.slice(4, 6) + '-' + digits.slice(6);
-    setter(out);
   };
 
   const handlePickDocument = async () => {
@@ -273,13 +279,19 @@ export default function LeavesScreen() {
   };
 
   // Filter balances: show only annual leave ("Congé annuel / CP / CA")
-  const annualBalances = balances.filter(b =>
+  const displayedBalances = balances.filter(b =>
     (b.leave_type_code || '').toUpperCase() === 'CA' ||
     (b.leave_type_code || '').toUpperCase() === 'CP' ||
     (b.leave_type_name || '').toLowerCase().includes('annuel') ||
     (b.leave_type_name || '').toLowerCase().includes('congés payés')
   );
-  const displayedBalances = annualBalances.length > 0 ? annualBalances : balances;
+
+  const filteredRequests = searchQuery.trim()
+    ? requests.filter(r =>
+        (r.leave_type_name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        getStatusCfg(r.status).label.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : requests;
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -306,11 +318,29 @@ export default function LeavesScreen() {
         </TouchableOpacity>
       </View>
 
+      {tab === 'requests' && (
+        <View style={styles.searchBar}>
+          <Ionicons name="search" size={18} color={COLORS.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Rechercher par type ou statut..."
+            placeholderTextColor={COLORS.textSecondary}
+            clearButtonMode="while-editing"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={18} color={COLORS.textSecondary} />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color={COLORS.primary} />
       ) : (
         <FlatList
-          data={tab === 'requests' ? requests : displayedBalances}
+          data={tab === 'requests' ? filteredRequests : displayedBalances}
           keyExtractor={(item) => String(item.id)}
           renderItem={tab === 'requests' ? renderRequest : renderBalance as any}
           contentContainerStyle={styles.list}
@@ -319,7 +349,9 @@ export default function LeavesScreen() {
             <View style={styles.empty}>
               <Ionicons name={tab === 'requests' ? 'document-text-outline' : 'wallet-outline'} size={48} color={COLORS.border} />
               <Text style={styles.emptyText}>
-                {tab === 'requests' ? 'Aucune demande de congé' : 'Aucun solde disponible'}
+                {tab === 'requests'
+                  ? (searchQuery.trim() ? 'Aucune demande trouvée' : 'Aucune demande de congé')
+                  : 'Aucun solde de congé annuel disponible'}
               </Text>
             </View>
           }
@@ -405,7 +437,11 @@ export default function LeavesScreen() {
         <SafeAreaView style={styles.modal}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Nouvelle demande de congé</Text>
-            <TouchableOpacity onPress={() => { setShowForm(false); setJustificationFile(null); }}>
+            <TouchableOpacity onPress={() => {
+              setShowForm(false); setJustificationFile(null);
+              setStartDay(''); setStartMonth(''); setStartYear('');
+              setEndDay(''); setEndMonth(''); setEndYear('');
+            }}>
               <Ionicons name="close" size={24} color={COLORS.text} />
             </TouchableOpacity>
           </View>
@@ -425,32 +461,116 @@ export default function LeavesScreen() {
 
             {/* ── Date de début ── */}
             <Text style={styles.fieldLabel}>Date de début *</Text>
-            <View style={styles.inputRow}>
-              <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} style={styles.inputIcon} />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={startDate}
-                onChangeText={t => handleDateInput(t, setStartDate)}
-                placeholder="AAAA-MM-JJ"
-                placeholderTextColor={COLORS.textSecondary}
-                keyboardType="numeric"
-                maxLength={10}
-              />
+            <View style={styles.dateRow3}>
+              <View style={styles.datePartWrap}>
+                <TextInput
+                  style={styles.datePartInput}
+                  value={startDay}
+                  onChangeText={v => {
+                    const d = v.replace(/\D/g, '').slice(0, 2);
+                    setStartDay(d);
+                    if (d.length === 2) startMonthRef.current?.focus();
+                  }}
+                  placeholder="JJ"
+                  placeholderTextColor={COLORS.textSecondary}
+                  keyboardType="numeric"
+                  maxLength={2}
+                  textAlign="center"
+                />
+              </View>
+              <Text style={styles.dateSep}>/</Text>
+              <View style={styles.datePartWrap}>
+                <TextInput
+                  ref={startMonthRef}
+                  style={styles.datePartInput}
+                  value={startMonth}
+                  onChangeText={v => {
+                    const m = v.replace(/\D/g, '').slice(0, 2);
+                    setStartMonth(m);
+                    if (m.length === 2) startYearRef.current?.focus();
+                  }}
+                  placeholder="MM"
+                  placeholderTextColor={COLORS.textSecondary}
+                  keyboardType="numeric"
+                  maxLength={2}
+                  textAlign="center"
+                />
+              </View>
+              <Text style={styles.dateSep}>/</Text>
+              <View style={[styles.datePartWrap, styles.datePartYear]}>
+                <TextInput
+                  ref={startYearRef}
+                  style={styles.datePartInput}
+                  value={startYear}
+                  onChangeText={v => {
+                    const y = v.replace(/\D/g, '').slice(0, 4);
+                    setStartYear(y);
+                    if (y.length === 4) endDayRef.current?.focus();
+                  }}
+                  placeholder="AAAA"
+                  placeholderTextColor={COLORS.textSecondary}
+                  keyboardType="numeric"
+                  maxLength={4}
+                  textAlign="center"
+                />
+              </View>
             </View>
 
             {/* ── Date de fin ── */}
             <Text style={styles.fieldLabel}>Date de fin *</Text>
-            <View style={styles.inputRow}>
-              <Ionicons name="calendar-outline" size={18} color={COLORS.textSecondary} style={styles.inputIcon} />
-              <TextInput
-                style={styles.inputWithIcon}
-                value={endDate}
-                onChangeText={t => handleDateInput(t, setEndDate)}
-                placeholder="AAAA-MM-JJ"
-                placeholderTextColor={COLORS.textSecondary}
-                keyboardType="numeric"
-                maxLength={10}
-              />
+            <View style={styles.dateRow3}>
+              <View style={styles.datePartWrap}>
+                <TextInput
+                  ref={endDayRef}
+                  style={styles.datePartInput}
+                  value={endDay}
+                  onChangeText={v => {
+                    const d = v.replace(/\D/g, '').slice(0, 2);
+                    setEndDay(d);
+                    if (d.length === 2) endMonthRef.current?.focus();
+                  }}
+                  placeholder="JJ"
+                  placeholderTextColor={COLORS.textSecondary}
+                  keyboardType="numeric"
+                  maxLength={2}
+                  textAlign="center"
+                />
+              </View>
+              <Text style={styles.dateSep}>/</Text>
+              <View style={styles.datePartWrap}>
+                <TextInput
+                  ref={endMonthRef}
+                  style={styles.datePartInput}
+                  value={endMonth}
+                  onChangeText={v => {
+                    const m = v.replace(/\D/g, '').slice(0, 2);
+                    setEndMonth(m);
+                    if (m.length === 2) endYearRef.current?.focus();
+                  }}
+                  placeholder="MM"
+                  placeholderTextColor={COLORS.textSecondary}
+                  keyboardType="numeric"
+                  maxLength={2}
+                  textAlign="center"
+                />
+              </View>
+              <Text style={styles.dateSep}>/</Text>
+              <View style={[styles.datePartWrap, styles.datePartYear]}>
+                <TextInput
+                  ref={endYearRef}
+                  style={styles.datePartInput}
+                  value={endYear}
+                  onChangeText={v => {
+                    const y = v.replace(/\D/g, '').slice(0, 4);
+                    setEndYear(y);
+                  }}
+                  placeholder="AAAA"
+                  placeholderTextColor={COLORS.textSecondary}
+                  keyboardType="numeric"
+                  maxLength={4}
+                  textAlign="center"
+                />
+              </View>
             </View>
 
             {/* ── Motif ── */}
@@ -717,4 +837,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 28,
   },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
+
+  // Search bar
+  searchBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: COLORS.white, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 10,
+    marginHorizontal: 12, marginBottom: 4,
+    borderWidth: 1.5, borderColor: COLORS.border,
+  },
+  searchInput: { flex: 1, fontSize: 14, color: COLORS.text },
+
+  // 3-part date input
+  dateRow3: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  datePartWrap: {
+    flex: 1,
+    backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border,
+    borderRadius: 12,
+  },
+  datePartYear: { flex: 2 },
+  datePartInput: {
+    paddingVertical: 14, paddingHorizontal: 8,
+    fontSize: 16, color: COLORS.text, fontWeight: '600',
+  },
+  dateSep: { fontSize: 20, color: COLORS.textSecondary, fontWeight: '300' },
 });
