@@ -45,7 +45,6 @@ export default function LeavesScreen() {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
-  const [tab, setTab] = useState<'requests' | 'balances'>('requests');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -256,30 +255,7 @@ export default function LeavesScreen() {
     );
   };
 
-  const renderBalance = ({ item }: { item: LeaveBalance }) => {
-    const remaining = item.remaining_days ?? item.remaining ?? 0;
-    const total = item.total_days ?? item.acquired ?? 0;
-    const used = item.used_days ?? item.taken ?? 0;
-    const pct = total > 0 ? Math.min((remaining / total) * 100, 100) : 0;
-    return (
-      <View style={styles.balanceCard}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.balanceName}>{item.leave_type_name}</Text>
-          <Text style={styles.balanceSub}>{used}j pris sur {total}j acquis</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: pct < 20 ? COLORS.danger : COLORS.primary }]} />
-          </View>
-        </View>
-        <View style={styles.remainingBadge}>
-          <Text style={[styles.remainingText, pct < 20 && { color: COLORS.danger }]}>{remaining}j</Text>
-          <Text style={styles.remainingSub}>restants</Text>
-        </View>
-      </View>
-    );
-  };
-
-  // Filter balances: show only annual leave ("Congé annuel / CP / CA")
-  const displayedBalances = balances.filter(b =>
+  const annualBalance = balances.find(b =>
     (b.leave_type_code || '').toUpperCase() === 'CA' ||
     (b.leave_type_code || '').toUpperCase() === 'CP' ||
     (b.leave_type_name || '').toLowerCase().includes('annuel') ||
@@ -295,68 +271,76 @@ export default function LeavesScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      {/* Tabs */}
-      <View style={styles.tabs}>
-        {(['requests', 'balances'] as const).map(t => (
-          <TouchableOpacity
-            key={t}
-            style={[styles.tab, tab === t && styles.tabActive]}
-            onPress={() => setTab(t)}
-          >
-            <Ionicons
-              name={t === 'requests' ? 'document-text-outline' : 'wallet-outline'}
-              size={16}
-              color={tab === t ? COLORS.white : COLORS.textSecondary}
-            />
-            <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-              {t === 'requests' ? 'Mes demandes' : 'Mes soldes'}
-            </Text>
+
+      {/* ── Solde congé annuel ── */}
+      {annualBalance && (() => {
+        const remaining = annualBalance.remaining_days ?? annualBalance.remaining ?? 0;
+        const total = annualBalance.total_days ?? annualBalance.acquired ?? 0;
+        const used = annualBalance.used_days ?? annualBalance.taken ?? 0;
+        const pct = total > 0 ? Math.min((remaining / total) * 100, 100) : 0;
+        return (
+          <View style={styles.balanceHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.balanceHeaderName}>{annualBalance.leave_type_name ?? 'Congé Annuel'}</Text>
+              <Text style={styles.balanceHeaderSub}>{used}j pris · {total}j acquis</Text>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: pct < 20 ? COLORS.danger : COLORS.primary }]} />
+              </View>
+            </View>
+            <View style={styles.balanceHeaderRight}>
+              <Text style={[styles.balanceHeaderDays, pct < 20 && { color: COLORS.danger }]}>{remaining}</Text>
+              <Text style={styles.balanceHeaderLabel}>jours restants</Text>
+            </View>
+          </View>
+        );
+      })()}
+
+      {/* ── Barre de recherche ── */}
+      <View style={styles.searchBar}>
+        <Ionicons name="search" size={18} color={COLORS.textSecondary} />
+        <TextInput
+          style={styles.searchInput}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Rechercher par type ou statut..."
+          placeholderTextColor={COLORS.textSecondary}
+          clearButtonMode="while-editing"
+        />
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Ionicons name="close-circle" size={18} color={COLORS.textSecondary} />
           </TouchableOpacity>
-        ))}
-        <TouchableOpacity style={styles.addBtn} onPress={() => setShowForm(true)}>
-          <Ionicons name="add" size={22} color={COLORS.white} />
-        </TouchableOpacity>
+        )}
       </View>
 
-      {tab === 'requests' && (
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={COLORS.textSecondary} />
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Rechercher par type ou statut..."
-            placeholderTextColor={COLORS.textSecondary}
-            clearButtonMode="while-editing"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+      {/* ── Liste des demandes ── */}
       {loading ? (
         <ActivityIndicator style={{ flex: 1 }} color={COLORS.primary} />
       ) : (
         <FlatList
-          data={tab === 'requests' ? filteredRequests : displayedBalances}
+          data={filteredRequests}
           keyExtractor={(item) => String(item.id)}
-          renderItem={tab === 'requests' ? renderRequest : renderBalance as any}
+          renderItem={renderRequest}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
+          ListHeaderComponent={
+            <Text style={styles.listSectionTitle}>Mes demandes</Text>
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Ionicons name={tab === 'requests' ? 'document-text-outline' : 'wallet-outline'} size={48} color={COLORS.border} />
+              <Ionicons name="document-text-outline" size={48} color={COLORS.border} />
               <Text style={styles.emptyText}>
-                {tab === 'requests'
-                  ? (searchQuery.trim() ? 'Aucune demande trouvée' : 'Aucune demande de congé')
-                  : 'Aucun solde de congé annuel disponible'}
+                {searchQuery.trim() ? 'Aucune demande trouvée' : 'Aucune demande de congé'}
               </Text>
             </View>
           }
         />
       )}
+
+      {/* ── FAB nouvelle demande ── */}
+      <TouchableOpacity style={styles.fab} onPress={() => setShowForm(true)} activeOpacity={0.85}>
+        <Ionicons name="add" size={28} color={COLORS.white} />
+      </TouchableOpacity>
 
       {/* Detail Modal */}
       <Modal visible={!!selectedLeave} animationType="slide" presentationStyle="pageSheet">
@@ -662,21 +646,35 @@ function DetailRow({ label, value }: { label: string; value?: string | null }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  tabs: { flexDirection: 'row', margin: 12, gap: 8, alignItems: 'center' },
-  tab: {
-    flex: 1, paddingVertical: 10, borderRadius: 10, flexDirection: 'row',
-    backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', gap: 6,
-    borderWidth: 1.5, borderColor: COLORS.border,
+
+  // Balance header card
+  balanceHeader: {
+    margin: 12, marginBottom: 8,
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
   },
-  tabActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  tabText: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
-  tabTextActive: { color: COLORS.white },
-  addBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: COLORS.accent, justifyContent: 'center', alignItems: 'center',
-    shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 3,
+  balanceHeaderName: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
+  balanceHeaderSub: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 8 },
+  balanceHeaderRight: { alignItems: 'center', minWidth: 60 },
+  balanceHeaderDays: { fontSize: 30, fontWeight: 'bold', color: COLORS.primary, lineHeight: 34 },
+  balanceHeaderLabel: { fontSize: 10, color: COLORS.textSecondary, textAlign: 'center' },
+
+  listSectionTitle: {
+    fontSize: 12, fontWeight: '700', color: COLORS.textSecondary,
+    paddingBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  list: { padding: 12, paddingTop: 4, gap: 10, paddingBottom: 32 },
+
+  // FAB
+  fab: {
+    position: 'absolute', bottom: 24, right: 20,
+    width: 56, height: 56, borderRadius: 28,
+    backgroundColor: COLORS.accent,
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: COLORS.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 6,
+  },
+
+  list: { padding: 12, paddingTop: 4, gap: 10, paddingBottom: 90 },
 
   // Request card
   card: {
@@ -692,19 +690,8 @@ const styles = StyleSheet.create({
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
   durationText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
 
-  // Balance card
-  balanceCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
-  },
-  balanceName: { fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 2 },
-  balanceSub: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 6 },
   progressBar: { height: 6, backgroundColor: COLORS.background, borderRadius: 3, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 3 },
-  remainingBadge: { alignItems: 'center' },
-  remainingText: { fontSize: 24, fontWeight: 'bold', color: COLORS.primary },
-  remainingSub: { fontSize: 10, color: COLORS.textSecondary },
 
   empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyText: { color: COLORS.textSecondary, fontSize: 15 },
