@@ -60,6 +60,7 @@ export interface LeaveBalance {
   leave_type: number;
   leave_type_name?: string;
   leave_type_code?: string;
+  leave_type_color?: string;
   year: number;
   acquired?: number;
   taken?: number;
