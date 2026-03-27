@@ -86,32 +86,13 @@ export default function DossierScreen() {
           </View>
         </View>
 
-        {/* ── Informations professionnelles ── */}
-        <Section title="Informations professionnelles" icon="briefcase-outline">
-          <InfoRow label="Fonction"       value={employee.fonction}     icon="person-outline" />
-          <InfoRow label="Service"        value={employee.service}      icon="business-outline" />
-          <InfoRow label="Business Line"  value={employee.business_line} icon="layers-outline" />
-          <InfoRow label="Projet"         value={employee.projet}       icon="folder-outline" />
-          <InfoRow label="Manager"        value={employee.manager}      icon="people-outline" />
-          <InfoRow label="Localisation"   value={employee.localisation} icon="location-outline" />
-          <InfoRow label="Date d'embauche" value={employee.date_embauche} icon="calendar-outline" />
-        </Section>
-
-        {/* ── Informations personnelles ── */}
-        <Section title="Informations personnelles" icon="person-outline">
-          <InfoRow
-            label="Sexe"
-            value={employee.sexe === 'H' ? 'Homme' : employee.sexe === 'F' ? 'Femme' : null}
-            icon="person-outline"
-          />
-          <InfoRow label="Email"     value={employee.email}     icon="mail-outline" />
-          <InfoRow label="Téléphone" value={employee.telephone} icon="call-outline" />
-        </Section>
-
-        {/* ── Compte utilisateur ── */}
-        <Section title="Compte utilisateur" icon="shield-checkmark-outline">
-          <InfoRow label="Identifiant"  value={user?.username} icon="key-outline" />
-          <InfoRow label="Email compte" value={user?.email}    icon="mail-outline" />
+        {/* ── Informations ── */}
+        <Section title="Informations" icon="information-circle-outline">
+          <InfoRow label="Service"    value={employee.service}   icon="business-outline" />
+          <InfoRow label="Manager"    value={employee.manager}   icon="people-outline" />
+          <InfoRow label="Email"      value={employee.email}     icon="mail-outline" />
+          <InfoRow label="Téléphone"  value={employee.telephone} icon="call-outline" />
+          <InfoRow label="Identifiant" value={user?.username}    icon="key-outline" />
         </Section>
 
         {/* ── Boutons ── */}
