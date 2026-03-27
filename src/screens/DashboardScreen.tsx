@@ -409,50 +409,6 @@ export default function DashboardScreen() {
       >
       <View style={styles.cardsContainer}>
         {/* ══════════════════════════════════════════
-            POINTAGE DU JOUR
-        ══════════════════════════════════════════ */}
-        <Animated.View style={[styles.card, { flex: 1, opacity: card1Fade, transform: [{ translateY: card1Slide }] }]}>
-          {/* Card header */}
-          <View style={styles.cardHeaderRow}>
-            <View style={styles.cardTitleRow}>
-              <View style={styles.clockIconWrap}>
-                <Ionicons name="time-outline" size={18} color={COLORS.primary} />
-              </View>
-              <Text style={styles.cardTitle}>Pointage du jour</Text>
-            </View>
-            <View style={[styles.statusPill, { borderColor: ptStatus.color }]}>
-              <View style={[styles.statusDot, { backgroundColor: ptStatus.color }]} />
-              <Text style={[styles.statusPillText, { color: ptStatus.color }]}>{ptStatus.label}</Text>
-            </View>
-          </View>
-
-          {/* Entrée / Sortie boxes */}
-          <View style={[styles.timeBoxRow, { flex: 1, alignItems: 'center' }]}>
-            <View style={[styles.timeBox, hasEntree ? styles.timeBoxActive : styles.timeBoxInactive]}>
-              <Text style={[styles.timeBoxLabel, hasEntree && { color: COLORS.success }]}>ENTRÉE</Text>
-              <Text style={[styles.timeBoxValue, hasEntree ? { color: COLORS.success } : { color: COLORS.textSecondary }]}>
-                {entreeTime}
-              </Text>
-            </View>
-            <Ionicons name="arrow-forward" size={18} color={COLORS.textSecondary} style={{ marginHorizontal: 8 }} />
-            <View style={[styles.timeBox, hasSortie ? styles.timeBoxActive : styles.timeBoxInactive]}>
-              <Text style={[styles.timeBoxLabel, hasSortie && { color: COLORS.primary }]}>SORTIE</Text>
-              <Text style={[styles.timeBoxValue, hasSortie ? { color: COLORS.primary } : { color: COLORS.textSecondary }]}>
-                {sortieTime}
-              </Text>
-            </View>
-          </View>
-
-          {/* Footer */}
-          <View style={styles.ptFooterRow}>
-            <Text style={styles.ptDurationText}>Durée travaillée : {workedDuration}</Text>
-            <TouchableOpacity onPress={handleOpenPtModal} style={styles.ptWeekLink}>
-              <Text style={styles.ptWeekLinkText}>Voir la semaine →</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-
-        {/* ══════════════════════════════════════════
             SOLDE DE CONGÉS
         ══════════════════════════════════════════ */}
         <Animated.View style={[styles.card, { flex: 1, opacity: card2Fade, transform: [{ translateY: card2Slide }] }]}>
@@ -543,6 +499,47 @@ export default function DashboardScreen() {
                   : '—'}
               </Text>
             </View>
+          </View>
+        </Animated.View>
+
+        {/* ══════════════════════════════════════════
+            POINTAGE DU JOUR
+        ══════════════════════════════════════════ */}
+        <Animated.View style={[styles.card, { flex: 1, opacity: card1Fade, transform: [{ translateY: card1Slide }] }]}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardTitleRow}>
+              <View style={styles.clockIconWrap}>
+                <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+              </View>
+              <Text style={styles.cardTitle}>Pointage du jour</Text>
+            </View>
+            <View style={[styles.statusPill, { borderColor: ptStatus.color }]}>
+              <View style={[styles.statusDot, { backgroundColor: ptStatus.color }]} />
+              <Text style={[styles.statusPillText, { color: ptStatus.color }]}>{ptStatus.label}</Text>
+            </View>
+          </View>
+
+          <View style={[styles.timeBoxRow, { flex: 1, alignItems: 'center' }]}>
+            <View style={[styles.timeBox, hasEntree ? styles.timeBoxActive : styles.timeBoxInactive]}>
+              <Text style={[styles.timeBoxLabel, hasEntree && { color: COLORS.success }]}>ENTRÉE</Text>
+              <Text style={[styles.timeBoxValue, hasEntree ? { color: COLORS.success } : { color: COLORS.textSecondary }]}>
+                {entreeTime}
+              </Text>
+            </View>
+            <Ionicons name="arrow-forward" size={18} color={COLORS.textSecondary} style={{ marginHorizontal: 8 }} />
+            <View style={[styles.timeBox, hasSortie ? styles.timeBoxActive : styles.timeBoxInactive]}>
+              <Text style={[styles.timeBoxLabel, hasSortie && { color: COLORS.primary }]}>SORTIE</Text>
+              <Text style={[styles.timeBoxValue, hasSortie ? { color: COLORS.primary } : { color: COLORS.textSecondary }]}>
+                {sortieTime}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.ptFooterRow}>
+            <Text style={styles.ptDurationText}>Durée travaillée : {workedDuration}</Text>
+            <TouchableOpacity onPress={handleOpenPtModal} style={styles.ptWeekLink}>
+              <Text style={styles.ptWeekLinkText}>Voir la semaine →</Text>
+            </TouchableOpacity>
           </View>
         </Animated.View>
 
