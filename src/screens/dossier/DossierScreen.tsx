@@ -14,7 +14,7 @@ function InfoRow({ label, value, icon }: InfoRowProps) {
   if (!value) return null;
   return (
     <View style={styles.row}>
-      {icon && <Ionicons name={icon} size={16} color={COLORS.textSecondary} style={styles.rowIcon} />}
+      {icon && <Ionicons name={icon} size={15} color={COLORS.textSecondary} style={styles.rowIcon} />}
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>{label}</Text>
         <Text style={styles.rowValue}>{value}</Text>
@@ -28,9 +28,7 @@ function Section({ title, icon, children }: SectionProps) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
-        <View style={styles.sectionIconBox}>
-          <Ionicons name={icon} size={18} color={COLORS.textSecondary} />
-        </View>
+        <Ionicons name={icon} size={15} color={COLORS.textSecondary} />
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
       {children}
@@ -63,66 +61,79 @@ export default function DossierScreen() {
   const statusLabels: Record<string, string> = {
     ACTIVE: 'Actif', EXITED: 'Sorti', SUSPENDED: 'Suspendu',
   };
+  const statusColor = statusColors[employee.status] ?? COLORS.textSecondary;
+  const statusLabel = statusLabels[employee.status] ?? employee.status;
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-        {/* Carte identité */}
+        {/* ── Carte identité ── */}
         <View style={styles.idCard}>
           <View style={styles.avatarCircle}>
             <Text style={styles.avatarText}>
               {employee.prenom[0]?.toUpperCase()}{employee.nom[0]?.toUpperCase()}
             </Text>
           </View>
-          <View style={styles.idInfo}>
-            <Text style={styles.fullName}>{employee.prenom} {employee.nom}</Text>
-            <Text style={styles.fonction}>{employee.fonction}</Text>
-            <Text style={styles.matricule}>Matricule : {employee.matricule}</Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: `${statusColors[employee.status]}20` }]}>
-            <View style={[styles.statusDot, { backgroundColor: statusColors[employee.status] }]} />
-            <Text style={[styles.statusText, { color: statusColors[employee.status] }]}>
-              {statusLabels[employee.status]}
-            </Text>
+          <Text style={styles.fullName}>{employee.prenom} {employee.nom}</Text>
+          {employee.fonction ? <Text style={styles.fonction}>{employee.fonction}</Text> : null}
+          <View style={styles.idFooter}>
+            <Text style={styles.matricule}>{employee.matricule}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: `${statusColor}25` }]}>
+              <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+              <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+            </View>
           </View>
         </View>
 
-        {/* Informations professionnelles */}
+        {/* ── Informations professionnelles ── */}
         <Section title="Informations professionnelles" icon="briefcase-outline">
-          <InfoRow label="Fonction" value={employee.fonction} icon="person-outline" />
-          <InfoRow label="Service" value={employee.service} icon="business-outline" />
-          <InfoRow label="Business Line" value={employee.business_line} icon="layers-outline" />
-          <InfoRow label="Projet" value={employee.projet} icon="folder-outline" />
-          <InfoRow label="Manager" value={employee.manager} icon="people-outline" />
-          <InfoRow label="Localisation" value={employee.localisation} icon="location-outline" />
+          <InfoRow label="Fonction"       value={employee.fonction}     icon="person-outline" />
+          <InfoRow label="Service"        value={employee.service}      icon="business-outline" />
+          <InfoRow label="Business Line"  value={employee.business_line} icon="layers-outline" />
+          <InfoRow label="Projet"         value={employee.projet}       icon="folder-outline" />
+          <InfoRow label="Manager"        value={employee.manager}      icon="people-outline" />
+          <InfoRow label="Localisation"   value={employee.localisation} icon="location-outline" />
           <InfoRow label="Date d'embauche" value={employee.date_embauche} icon="calendar-outline" />
         </Section>
 
-        {/* Informations personnelles */}
+        {/* ── Informations personnelles ── */}
         <Section title="Informations personnelles" icon="person-outline">
-          <InfoRow label="Sexe" value={employee.sexe === 'H' ? 'Homme' : employee.sexe === 'F' ? 'Femme' : null} icon="person-outline" />
-          <InfoRow label="Email" value={employee.email} icon="mail-outline" />
+          <InfoRow
+            label="Sexe"
+            value={employee.sexe === 'H' ? 'Homme' : employee.sexe === 'F' ? 'Femme' : null}
+            icon="person-outline"
+          />
+          <InfoRow label="Email"     value={employee.email}     icon="mail-outline" />
           <InfoRow label="Téléphone" value={employee.telephone} icon="call-outline" />
         </Section>
 
-        {/* Compte utilisateur */}
+        {/* ── Compte utilisateur ── */}
         <Section title="Compte utilisateur" icon="shield-checkmark-outline">
-          <InfoRow label="Identifiant" value={user?.username} icon="key-outline" />
-          <InfoRow label="Email compte" value={user?.email} icon="mail-outline" />
+          <InfoRow label="Identifiant"  value={user?.username} icon="key-outline" />
+          <InfoRow label="Email compte" value={user?.email}    icon="mail-outline" />
         </Section>
 
-        {/* Actions */}
-        <TouchableOpacity style={styles.changePasswordBtn} onPress={() => navigation.navigate('ChangePassword')}>
-          <Ionicons name="lock-closed-outline" size={20} color={COLORS.primary} />
-          <Text style={styles.changePasswordText}>Changer le mot de passe</Text>
-          <Ionicons name="chevron-forward" size={18} color={COLORS.textSecondary} style={{ marginLeft: 'auto' }} />
-        </TouchableOpacity>
+        {/* ── Boutons ── */}
+        <View style={styles.btnRow}>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnBlue]}
+            onPress={() => navigation.navigate('ChangePassword')}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="lock-closed-outline" size={18} color={COLORS.white} />
+            <Text style={styles.btnText}>Mot de passe</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={() => logout()}>
-          <Ionicons name="log-out-outline" size={20} color={COLORS.danger} />
-          <Text style={styles.logoutText}>Se déconnecter</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.btn, styles.btnRed]}
+            onPress={() => logout()}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="log-out-outline" size={18} color={COLORS.white} />
+            <Text style={styles.btnText}>Déconnexion</Text>
+          </TouchableOpacity>
+        </View>
 
       </ScrollView>
     </SafeAreaView>
@@ -136,62 +147,74 @@ const styles = StyleSheet.create({
   notFoundSub: { fontSize: 13, color: COLORS.textSecondary },
   scroll: { padding: 16, paddingBottom: 32 },
 
+  // ── Carte identité ──
   idCard: {
-    backgroundColor: COLORS.primary, borderRadius: 16, padding: 20,
-    flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16,
+    backgroundColor: COLORS.primary,
+    borderRadius: 20,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
   },
   avatarCircle: {
-    width: 60, height: 60, borderRadius: 30,
+    width: 72, height: 72, borderRadius: 36,
     backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)',
     justifyContent: 'center', alignItems: 'center',
+    marginBottom: 12,
   },
-  avatarText: { fontSize: 22, fontWeight: 'bold', color: COLORS.white },
-  idInfo: { flex: 1 },
-  fullName: { fontSize: 16, fontWeight: 'bold', color: COLORS.white },
-  fonction: { fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
-  matricule: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 4 },
+  avatarText: { fontSize: 26, fontWeight: 'bold', color: COLORS.white },
+  fullName: { fontSize: 18, fontWeight: 'bold', color: COLORS.white, textAlign: 'center', marginBottom: 2 },
+  fonction: { fontSize: 13, color: 'rgba(255,255,255,0.75)', textAlign: 'center', marginBottom: 12 },
+  idFooter: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
+  matricule: {
+    fontSize: 12, color: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10,
+  },
   statusBadge: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20,
-    alignSelf: 'flex-start',
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10,
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
-  statusText: { fontSize: 11, fontWeight: '600' },
+  statusText: { fontSize: 12, fontWeight: '600' },
 
+  // ── Sections ──
   section: {
-    backgroundColor: COLORS.white, borderRadius: 12, padding: 16,
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 16,
     marginBottom: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
   },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  sectionIconBox: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: COLORS.background,
-    justifyContent: 'center', alignItems: 'center',
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12,
   },
-  sectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: COLORS.text },
 
+  // ── Ligne ──
   row: {
     flexDirection: 'row', alignItems: 'flex-start',
     paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.background,
   },
-  rowIcon: { marginRight: 10, marginTop: 2 },
+  rowIcon: { marginRight: 10, marginTop: 1 },
   rowContent: { flex: 1, flexDirection: 'row', justifyContent: 'space-between' },
   rowLabel: { fontSize: 13, color: COLORS.textSecondary, flex: 1 },
   rowValue: { fontSize: 13, color: COLORS.text, fontWeight: '500', maxWidth: '55%', textAlign: 'right' },
 
-  changePasswordBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: COLORS.white, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16,
-    marginBottom: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
-  changePasswordText: { fontSize: 15, color: COLORS.text, fontWeight: '600' },
-
-  logoutBtn: {
+  // ── Boutons ──
+  btnRow: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  btn: {
+    flex: 1,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.white, borderRadius: 12, paddingVertical: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
+    paddingVertical: 14, borderRadius: 14,
+    shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 6, elevation: 4,
   },
-  logoutText: { fontSize: 15, color: COLORS.danger, fontWeight: '600' },
+  btnBlue: { backgroundColor: COLORS.primary, shadowColor: COLORS.primary },
+  btnRed:  { backgroundColor: COLORS.danger,  shadowColor: COLORS.danger  },
+  btnText: { fontSize: 14, fontWeight: '700', color: COLORS.white },
 });
