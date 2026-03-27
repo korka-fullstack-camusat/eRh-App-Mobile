@@ -25,6 +25,9 @@ import {
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { fr } from 'date-fns/locale';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
+
+const AnimatedSvgCircle = Animated.createAnimatedComponent(SvgCircle);
 
 function fmtTime(val?: string | null): string {
   if (!val) return '-- : --';
@@ -83,6 +86,7 @@ export default function DashboardScreen() {
   const card2Slide = useRef(new Animated.Value(40)).current;
   const alertFade = useRef(new Animated.Value(0)).current;
   const alertSlide = useRef(new Animated.Value(40)).current;
+  const circleProgress = useRef(new Animated.Value(0)).current;
 
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
@@ -129,6 +133,11 @@ export default function DashboardScreen() {
   }, [employee]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Animate circle when balances change
+  useEffect(() => {
+    Animated.timing(circleProgress, { toValue: 1, duration: 1000, useNativeDriver: false }).start();
+  }, [balances]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -277,6 +286,29 @@ export default function DashboardScreen() {
   const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
   const weekDays = allDays.filter(d => d.date >= weekStartStr && d.date <= weekEndStr);
 
+  // ── Solde congé annuel ──
+  const annualBalance = balances.find(b =>
+    (b.leave_type_code || '').toUpperCase() === 'CA' ||
+    (b.leave_type_code || '').toUpperCase() === 'CP' ||
+    (b.leave_type_name || '').toLowerCase().includes('annuel') ||
+    (b.leave_type_name || '').toLowerCase().includes('congés payés')
+  ) ?? balances[0] ?? null;
+
+  const remainingDays = annualBalance ? (annualBalance.remaining_days ?? annualBalance.remaining ?? 0) : 0;
+  const usedDays = annualBalance ? (annualBalance.used_days ?? annualBalance.taken ?? 0) : 0;
+  const totalDays = annualBalance ? (annualBalance.total_days ?? annualBalance.acquired ?? 0) : 0;
+  const progressPct = totalDays > 0 ? remainingDays / totalDays : 0;
+
+  // ── Circular progress SVG ──
+  const circleSize = 70;
+  const strokeWidth = 7;
+  const radius = (circleSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circleProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [circumference, circumference * (1 - progressPct)],
+  });
+
   const fullName = employee ? `${employee.prenom} ${employee.nom}` : (user?.employee_name || user?.username || 'Employé');
   const firstName = employee?.prenom || user?.first_name || fullName.split(' ')[0];
   const lastName = employee?.nom || user?.last_name || fullName.split(' ').slice(1).join(' ');
@@ -391,34 +423,48 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Balance list — same data as LeavesScreen "Mes soldes" */}
-          {balances.length === 0 ? (
-            <Text style={styles.noBalanceText}>Aucun solde disponible</Text>
-          ) : (
-            balances.map((bal, i) => {
-              const remaining = bal.remaining_days ?? bal.remaining ?? 0;
-              const total = bal.total_days ?? bal.acquired ?? 0;
-              const used = bal.used_days ?? bal.taken ?? 0;
-              const pct = total > 0 ? Math.min((remaining / total) * 100, 100) : 0;
-              const isLow = pct < 20;
-              return (
-                <View key={i} style={[styles.miniBalanceRow, i < balances.length - 1 && styles.miniBalanceRowBorder]}>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.miniBalanceHeader}>
-                      <Text style={styles.miniBalanceName}>{bal.leave_type_name}</Text>
-                      <Text style={[styles.miniBalanceRemaining, isLow && { color: COLORS.danger }]}>
-                        {remaining}j restants
-                      </Text>
-                    </View>
-                    <Text style={styles.miniBalanceSub}>{used}j pris sur {total}j acquis</Text>
-                    <View style={styles.miniProgressBg}>
-                      <View style={[styles.miniProgressFill, { width: `${pct}%`, backgroundColor: isLow ? COLORS.danger : COLORS.primary }]} />
-                    </View>
-                  </View>
-                </View>
-              );
-            })
-          )}
+          {/* Circular progress + info */}
+          <View style={styles.congesRow}>
+            {/* Circular indicator */}
+            <View style={styles.circleContainer}>
+              <Svg width={circleSize} height={circleSize}>
+                <SvgCircle
+                  cx={circleSize / 2} cy={circleSize / 2} r={radius}
+                  stroke="#E5E7EB" strokeWidth={strokeWidth} fill="transparent"
+                />
+                <AnimatedSvgCircle
+                  cx={circleSize / 2} cy={circleSize / 2} r={radius}
+                  stroke={COLORS.success} strokeWidth={strokeWidth} fill="transparent"
+                  strokeLinecap="round"
+                  strokeDasharray={`${circumference}`}
+                  strokeDashoffset={strokeDashoffset}
+                  rotation="-90"
+                  origin={`${circleSize / 2}, ${circleSize / 2}`}
+                />
+              </Svg>
+              <View style={styles.circleTextWrap}>
+                <Text style={styles.circleValue}>{Math.round(remainingDays)}</Text>
+              </View>
+            </View>
+
+            {/* Right info */}
+            <View style={styles.congesInfo}>
+              <Text style={styles.congesLabel}>jours disponibles</Text>
+              <Text style={styles.congesDetail}>{Math.round(usedDays)} utilisés · {Math.round(totalDays)} total</Text>
+              {annualBalance?.leave_type_name ? (
+                <Text style={styles.congesTypeName}>{annualBalance.leave_type_name}</Text>
+              ) : null}
+              {/* Progress bar */}
+              <View style={styles.progressBarBg}>
+                <Animated.View style={[styles.progressBarFill, {
+                  width: circleProgress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', `${Math.round(progressPct * 100)}%`],
+                  }),
+                }]} />
+              </View>
+            </View>
+          </View>
         </Animated.View>
 
         {/* ══════════════════════════════════════════
@@ -796,51 +842,19 @@ const styles = StyleSheet.create({
   },
 
   // ── Congés section ──
-  noBalanceText: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    paddingVertical: 8,
+  congesRow: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  circleContainer: {
+    position: 'relative', width: 70, height: 70,
+    justifyContent: 'center', alignItems: 'center',
   },
-  miniBalanceRow: {
-    paddingVertical: 10,
-  },
-  miniBalanceRowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  miniBalanceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 3,
-  },
-  miniBalanceName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
-    flex: 1,
-  },
-  miniBalanceRemaining: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  miniBalanceSub: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginBottom: 6,
-  },
-  miniProgressBg: {
-    height: 5,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  miniProgressFill: {
-    height: 5,
-    borderRadius: 3,
-  },
+  circleTextWrap: { position: 'absolute', justifyContent: 'center', alignItems: 'center' },
+  circleValue: { fontSize: 22, fontWeight: 'bold', color: COLORS.success },
+  congesInfo: { flex: 1 },
+  congesLabel: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
+  congesDetail: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 4 },
+  congesTypeName: { fontSize: 11, color: COLORS.textSecondary, fontStyle: 'italic', marginBottom: 6 },
+  progressBarBg: { height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, overflow: 'hidden' },
+  progressBarFill: { height: 6, backgroundColor: COLORS.success, borderRadius: 3 },
 
   // ── Alert banner ──
   alertBanner: {
