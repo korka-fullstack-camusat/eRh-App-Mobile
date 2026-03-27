@@ -88,6 +88,10 @@ export default function DashboardScreen() {
   const alertFade = useRef(new Animated.Value(0)).current;
   const alertSlide = useRef(new Animated.Value(40)).current;
   const circleProgress = useRef(new Animated.Value(0)).current;
+  const toastY = useRef(new Animated.Value(-110)).current;
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastRunning = useRef(false);
+  const ptIncompleteRef = useRef(false);
 
   const today = new Date();
   const todayStr = format(today, 'yyyy-MM-dd');
@@ -134,6 +138,27 @@ export default function DashboardScreen() {
   }, [employee]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // ── Toast "Pensez à pointer" toutes les 2 minutes ──
+  useEffect(() => {
+    const trigger = () => {
+      if (!ptIncompleteRef.current || toastRunning.current) return;
+      toastRunning.current = true;
+      setToastVisible(true);
+      Animated.sequence([
+        Animated.spring(toastY, { toValue: 0, tension: 80, friction: 12, useNativeDriver: true }),
+        Animated.delay(4000),
+        Animated.timing(toastY, { toValue: -110, duration: 350, useNativeDriver: true }),
+      ]).start(() => {
+        toastRunning.current = false;
+        setToastVisible(false);
+        toastY.setValue(-110);
+      });
+    };
+    const initial = setTimeout(trigger, 1500);
+    const interval = setInterval(trigger, 120000);
+    return () => { clearTimeout(initial); clearInterval(interval); };
+  }, [toastY]);
 
   // Animate circle when balances change
   useEffect(() => {
@@ -272,6 +297,8 @@ export default function DashboardScreen() {
     return { label: 'Incomplet', color: '#E8910C', isIncomplete: true };
   };
   const ptStatus = getPointageStatus();
+  ptIncompleteRef.current = ptStatus.isIncomplete;
+
   const entreeTime = todayRecord ? fmtTime(todayRecord.in_time) : '-- : --';
   const sortieTime = todayRecord ? fmtTime(todayRecord.out_time) : '-- : --';
   const hasEntree = entreeTime !== '-- : --';
@@ -475,20 +502,6 @@ export default function DashboardScreen() {
         {/* ══════════════════════════════════════════
             ALERT BANNER (when incomplete)
         ══════════════════════════════════════════ */}
-        {ptStatus.isIncomplete && (
-          <Animated.View style={{ opacity: alertFade, transform: [{ translateY: alertSlide }] }}>
-            <TouchableOpacity style={styles.alertBanner} activeOpacity={0.8} onPress={() => setShowPtModal(true)}>
-              <View style={styles.alertIconWrap}>
-                <Ionicons name="notifications" size={20} color={COLORS.danger} />
-              </View>
-              <View style={styles.alertContent}>
-                <Text style={styles.alertTitle}>Pensez à pointer votre sortie</Text>
-                <Text style={styles.alertSubtitle}>Votre journée est incomplète</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={COLORS.danger} />
-            </TouchableOpacity>
-          </Animated.View>
-        )}
       </ScrollView>
 
       {/* ══════════════════════════════════════════
@@ -634,6 +647,22 @@ export default function DashboardScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* ── Toast "Pensez à pointer" ── */}
+      {toastVisible && (
+        <Animated.View style={[styles.toast, { top: insets.top + 10, transform: [{ translateY: toastY }] }]}>
+          <TouchableOpacity style={styles.toastInner} onPress={() => setShowPtModal(true)} activeOpacity={0.9}>
+            <View style={styles.toastIconWrap}>
+              <Ionicons name="notifications" size={18} color={COLORS.white} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.toastTitle}>Pensez à pointer votre sortie</Text>
+              <Text style={styles.toastSub}>Votre journée est incomplète</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 }
@@ -859,40 +888,22 @@ const styles = StyleSheet.create({
   progressBarBg: { height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, overflow: 'hidden' },
   progressBarFill: { height: 6, backgroundColor: COLORS.success, borderRadius: 3 },
 
-  // ── Alert banner ──
-  alertBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 16,
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 14,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
+  // ── Toast glissant ──
+  toast: {
+    position: 'absolute', left: 16, right: 16, zIndex: 999,
   },
-  alertIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#FEE2E2',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
+  toastInner: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.danger, borderRadius: 14, padding: 14,
+    shadowColor: COLORS.danger, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 10, elevation: 8,
   },
-  alertContent: {
-    flex: 1,
+  toastIconWrap: {
+    width: 34, height: 34, borderRadius: 9,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center', alignItems: 'center',
   },
-  alertTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#991B1B',
-  },
-  alertSubtitle: {
-    fontSize: 12,
-    color: COLORS.danger,
-    marginTop: 2,
-  },
+  toastTitle: { fontSize: 13, fontWeight: '700', color: COLORS.white },
+  toastSub: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
 
   // ── Modal ──
   modal: { flex: 1, backgroundColor: COLORS.background },

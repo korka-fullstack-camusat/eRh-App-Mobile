@@ -274,41 +274,14 @@ export default function LeavesScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
 
       {/* ── Solde congé annuel ── */}
-      {loading ? (
-        <View style={[styles.balanceHeader, { opacity: 0.5 }]}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.balanceHeaderName}>Congé Annuel</Text>
-            <Text style={styles.balanceHeaderSub}>Chargement...</Text>
-            <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: '0%', backgroundColor: COLORS.primary }]} />
-            </View>
-          </View>
-          <View style={styles.balanceHeaderRight}>
-            <Text style={styles.balanceHeaderDays}>—</Text>
-            <Text style={styles.balanceHeaderLabel}>jours restants</Text>
-          </View>
-        </View>
-      ) : annualBalance ? (() => {
-        const remaining = annualBalance.remaining_days ?? annualBalance.remaining ?? 0;
-        const total = annualBalance.total_days ?? annualBalance.acquired ?? 0;
-        const used = annualBalance.used_days ?? annualBalance.taken ?? 0;
-        const pct = total > 0 ? Math.min((remaining / total) * 100, 100) : 0;
-        return (
-          <View style={styles.balanceHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.balanceHeaderName}>{annualBalance.leave_type_name ?? 'Congé Annuel'}</Text>
-              <Text style={styles.balanceHeaderSub}>{used}j pris · {total}j acquis</Text>
-              <View style={styles.progressBar}>
-                <View style={[styles.progressFill, { width: `${pct}%`, backgroundColor: pct < 20 ? COLORS.danger : COLORS.primary }]} />
-              </View>
-            </View>
-            <View style={styles.balanceHeaderRight}>
-              <Text style={[styles.balanceHeaderDays, pct < 20 && { color: COLORS.danger }]}>{remaining}</Text>
-              <Text style={styles.balanceHeaderLabel}>jours restants</Text>
-            </View>
-          </View>
-        );
-      })() : null}
+      <View style={styles.balanceHeader}>
+        <Text style={styles.balanceHeaderName}>
+          {annualBalance?.leave_type_name ?? 'Congé Annuel'}
+        </Text>
+        <Text style={styles.balanceHeaderDays}>
+          {loading ? '—' : `${annualBalance?.remaining_days ?? annualBalance?.remaining ?? 0} jours`}
+        </Text>
+      </View>
 
       {/* ── Barre de recherche ── */}
       <View style={styles.searchBar}>
@@ -665,15 +638,12 @@ const styles = StyleSheet.create({
   // Balance header card
   balanceHeader: {
     margin: 12, marginBottom: 8,
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 16,
-    flexDirection: 'row', alignItems: 'center', gap: 14,
+    backgroundColor: COLORS.white, borderRadius: 14, paddingHorizontal: 18, paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
   },
-  balanceHeaderName: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
-  balanceHeaderSub: { fontSize: 12, color: COLORS.textSecondary, marginBottom: 8 },
-  balanceHeaderRight: { alignItems: 'center', minWidth: 60 },
-  balanceHeaderDays: { fontSize: 30, fontWeight: 'bold', color: COLORS.primary, lineHeight: 34 },
-  balanceHeaderLabel: { fontSize: 10, color: COLORS.textSecondary, textAlign: 'center' },
+  balanceHeaderName: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  balanceHeaderDays: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary },
 
   listSectionTitle: {
     fontSize: 12, fontWeight: '700', color: COLORS.textSecondary,
@@ -705,8 +675,6 @@ const styles = StyleSheet.create({
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 },
   durationText: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
 
-  progressBar: { height: 6, backgroundColor: COLORS.background, borderRadius: 3, overflow: 'hidden' },
-  progressFill: { height: '100%', borderRadius: 3 },
 
   empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyText: { color: COLORS.textSecondary, fontSize: 15 },
