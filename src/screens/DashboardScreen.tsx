@@ -407,10 +407,11 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         showsVerticalScrollIndicator={false}
       >
+      <View style={styles.cardsContainer}>
         {/* ══════════════════════════════════════════
             POINTAGE DU JOUR
         ══════════════════════════════════════════ */}
-        <Animated.View style={[styles.card, { opacity: card1Fade, transform: [{ translateY: card1Slide }] }]}>
+        <Animated.View style={[styles.card, { flex: 1, opacity: card1Fade, transform: [{ translateY: card1Slide }] }]}>
           {/* Card header */}
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardTitleRow}>
@@ -426,7 +427,7 @@ export default function DashboardScreen() {
           </View>
 
           {/* Entrée / Sortie boxes */}
-          <View style={styles.timeBoxRow}>
+          <View style={[styles.timeBoxRow, { flex: 1, alignItems: 'center' }]}>
             <View style={[styles.timeBox, hasEntree ? styles.timeBoxActive : styles.timeBoxInactive]}>
               <Text style={[styles.timeBoxLabel, hasEntree && { color: COLORS.success }]}>ENTRÉE</Text>
               <Text style={[styles.timeBoxValue, hasEntree ? { color: COLORS.success } : { color: COLORS.textSecondary }]}>
@@ -454,7 +455,7 @@ export default function DashboardScreen() {
         {/* ══════════════════════════════════════════
             SOLDE DE CONGÉS
         ══════════════════════════════════════════ */}
-        <Animated.View style={[styles.card, { opacity: card2Fade, transform: [{ translateY: card2Slide }] }]}>
+        <Animated.View style={[styles.card, { flex: 1, opacity: card2Fade, transform: [{ translateY: card2Slide }] }]}>
           {/* Card header */}
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardTitleRow}>
@@ -469,7 +470,7 @@ export default function DashboardScreen() {
           </View>
 
           {/* Circular progress + info */}
-          <View style={styles.congesRow}>
+          <View style={[styles.congesRow, { flex: 1, alignItems: 'center' }]}>
             {/* Circular indicator */}
             <View style={styles.circleContainer}>
               <Svg width={circleSize} height={circleSize}>
@@ -515,7 +516,7 @@ export default function DashboardScreen() {
         {/* ══════════════════════════════════════════
             BULLETINS DE PAIE
         ══════════════════════════════════════════ */}
-        <Animated.View style={[styles.card, { opacity: card3Fade, transform: [{ translateY: card3Slide }] }]}>
+        <Animated.View style={[styles.card, { flex: 1, opacity: card3Fade, transform: [{ translateY: card3Slide }] }]}>
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardTitleRow}>
               <View style={[styles.clockIconWrap, { backgroundColor: '#F0FDF4' }]}>
@@ -528,7 +529,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          <View style={styles.bulletinBoxRow}>
+          <View style={[styles.bulletinBoxRow, { flex: 1, alignItems: 'center' }]}>
             <View style={styles.bulletinBox}>
               <Text style={styles.bulletinBoxCount}>{bulletins.length}</Text>
               <Text style={styles.bulletinBoxLabel}>disponibles</Text>
@@ -545,6 +546,7 @@ export default function DashboardScreen() {
           </View>
         </Animated.View>
 
+      </View>
       </ScrollView>
 
       {/* ══════════════════════════════════════════
@@ -716,13 +718,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollView: { flex: 1, backgroundColor: COLORS.background },
-  scroll: { paddingBottom: 30 },
+  scroll: { flexGrow: 1 },
+  cardsContainer: { flex: 1, padding: 10, paddingBottom: 12, gap: 8 },
 
   // ── Header ──
   header: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: 14,
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -803,10 +806,8 @@ const styles = StyleSheet.create({
   // ── Cards ──
   card: {
     backgroundColor: COLORS.white,
-    marginHorizontal: 16,
-    marginTop: 12,
     borderRadius: 16,
-    padding: 14,
+    padding: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
