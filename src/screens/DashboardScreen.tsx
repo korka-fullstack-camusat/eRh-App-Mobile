@@ -14,6 +14,7 @@ import {
   getLeaveTypes, createLeaveRequest,
 } from '@/services/leaveService';
 import { getMyAttendance } from '@/services/attendanceService';
+import { getAvailableBulletins } from '@/services/employeeService';
 import type { LeaveBalance, LeaveRequest, LeaveType } from '@/types/leave';
 import type { EmployeePeriodDetailDay } from '@/types/attendance';
 import { COLORS } from '@/theme';
@@ -28,6 +29,9 @@ import { fr } from 'date-fns/locale';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 
 const AnimatedSvgCircle = Animated.createAnimatedComponent(SvgCircle);
+
+const MONTHS_FR = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+  'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
 function fmtTime(val?: string | null): string {
   if (!val) return '-- : --';
@@ -60,6 +64,7 @@ export default function DashboardScreen() {
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
   const [allDays, setAllDays] = useState<EmployeePeriodDetailDay[]>([]);
   const [allLeaves, setAllLeaves] = useState<LeaveRequest[]>([]);
+  const [bulletins, setBulletins] = useState<{ year: number; month: number }[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -85,6 +90,8 @@ export default function DashboardScreen() {
   const card1Slide = useRef(new Animated.Value(40)).current;
   const card2Fade = useRef(new Animated.Value(0)).current;
   const card2Slide = useRef(new Animated.Value(40)).current;
+  const card3Fade = useRef(new Animated.Value(0)).current;
+  const card3Slide = useRef(new Animated.Value(40)).current;
   const alertFade = useRef(new Animated.Value(0)).current;
   const alertSlide = useRef(new Animated.Value(40)).current;
   const circleProgress = useRef(new Animated.Value(0)).current;
@@ -113,6 +120,10 @@ export default function DashboardScreen() {
         Animated.spring(card2Slide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
       ]),
       Animated.parallel([
+        Animated.timing(card3Fade, { toValue: 1, duration: 400, useNativeDriver: true }),
+        Animated.spring(card3Slide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
         Animated.timing(alertFade, { toValue: 1, duration: 400, useNativeDriver: true }),
         Animated.spring(alertSlide, { toValue: 0, tension: 60, friction: 10, useNativeDriver: true }),
       ]),
@@ -124,17 +135,19 @@ export default function DashboardScreen() {
     const start = format(startOfMonth(today), 'yyyy-MM-dd');
     const end = format(endOfMonth(today), 'yyyy-MM-dd');
 
-    const [bal, att, reqs, types] = await Promise.allSettled([
+    const [bal, att, reqs, types, buls] = await Promise.allSettled([
       getMyLeaveBalances(employee.id),
       getMyAttendance({ employee_id: employee.id, start, end }),
       getMyLeaveRequests(employee.id),
       getLeaveTypes(),
+      employee.matricule ? getAvailableBulletins(employee.matricule) : Promise.resolve([]),
     ]);
 
     if (bal.status === 'fulfilled') setBalances(bal.value);
     if (att.status === 'fulfilled') setAllDays(att.value.days ?? []);
     if (reqs.status === 'fulfilled') setAllLeaves(reqs.value);
     if (types.status === 'fulfilled') setLeaveTypes(types.value);
+    if (buls.status === 'fulfilled') setBulletins((buls.value as { year: number; month: number }[]).sort((a, b) => b.year - a.year || b.month - a.month));
   }, [employee]);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -500,8 +513,38 @@ export default function DashboardScreen() {
         </Animated.View>
 
         {/* ══════════════════════════════════════════
-            ALERT BANNER (when incomplete)
+            BULLETINS DE PAIE
         ══════════════════════════════════════════ */}
+        <Animated.View style={[styles.card, { opacity: card3Fade, transform: [{ translateY: card3Slide }] }]}>
+          <View style={styles.cardHeaderRow}>
+            <View style={styles.cardTitleRow}>
+              <View style={[styles.clockIconWrap, { backgroundColor: '#F0FDF4' }]}>
+                <Ionicons name="document-text" size={18} color={COLORS.success} />
+              </View>
+              <Text style={styles.cardTitle}>Bulletins de paie</Text>
+            </View>
+            <TouchableOpacity onPress={() => navigation.navigate('PayslipsTab')}>
+              <Text style={styles.voirLink}>Voir →</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.bulletinBoxRow}>
+            <View style={styles.bulletinBox}>
+              <Text style={styles.bulletinBoxCount}>{bulletins.length}</Text>
+              <Text style={styles.bulletinBoxLabel}>disponibles</Text>
+            </View>
+            <View style={styles.bulletinDivider} />
+            <View style={[styles.bulletinBox, { alignItems: 'flex-start', paddingLeft: 16 }]}>
+              <Text style={styles.bulletinBoxLabel}>Dernier bulletin</Text>
+              <Text style={styles.bulletinBoxLatest}>
+                {bulletins.length > 0
+                  ? `${MONTHS_FR[bulletins[0].month]} ${bulletins[0].year}`
+                  : '—'}
+              </Text>
+            </View>
+          </View>
+        </Animated.View>
+
       </ScrollView>
 
       {/* ══════════════════════════════════════════
@@ -761,9 +804,9 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
     marginHorizontal: 16,
-    marginTop: 16,
+    marginTop: 12,
     borderRadius: 16,
-    padding: 18,
+    padding: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -774,7 +817,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   cardTitleRow: {
     flexDirection: 'row',
@@ -962,4 +1005,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 24,
   },
   submitBtnText: { color: COLORS.white, fontSize: 16, fontWeight: 'bold' },
+
+  // ── Carte bulletins ──
+  bulletinBoxRow: {
+    flexDirection: 'row', alignItems: 'center',
+  },
+  bulletinBox: {
+    flex: 1, alignItems: 'center', paddingVertical: 8,
+  },
+  bulletinDivider: {
+    width: 1, height: 40, backgroundColor: COLORS.border,
+  },
+  bulletinBoxCount: {
+    fontSize: 28, fontWeight: 'bold', color: COLORS.success,
+  },
+  bulletinBoxLabel: {
+    fontSize: 11, color: COLORS.textSecondary, marginTop: 2,
+  },
+  bulletinBoxLatest: {
+    fontSize: 15, fontWeight: '700', color: COLORS.text, marginTop: 4,
+  },
 });
