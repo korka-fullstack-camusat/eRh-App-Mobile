@@ -1,10 +1,23 @@
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, View, Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/theme';
+import CamusatLogo from '@/components/CamusatLogo';
+
+function HeaderLogo() {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 4 }}>
+      <CamusatLogo size={30} showText={false} />
+      <View>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: COLORS.white, letterSpacing: -0.3 }}>camusat</Text>
+        <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.75)', letterSpacing: 1.2, textTransform: 'uppercase' }}>ERH</Text>
+      </View>
+    </View>
+  );
+}
 
 import DashboardScreen from '@/screens/DashboardScreen';
 import LeavesScreen from '@/screens/leaves/LeavesScreen';
@@ -34,6 +47,7 @@ function ProfileStackNavigator() {
         headerStyle: { backgroundColor: COLORS.primary },
         headerTintColor: COLORS.white,
         headerTitleStyle: { fontWeight: 'bold' },
+        headerLeft: () => <HeaderLogo />,
       }}
     >
       <ProfileStack.Screen name="ProfileMain" component={DossierScreen} options={{ title: 'Mon profil' }} />
@@ -82,12 +96,12 @@ export default function MainNavigator() {
       <Tab.Screen
         name="LeavesTab"
         component={LeavesScreen}
-        options={{ title: 'Cong\u00e9s', headerTitle: 'Mes cong\u00e9s' }}
+        options={{ title: 'Cong\u00e9s', headerTitle: 'Mes cong\u00e9s', headerLeft: () => <HeaderLogo /> }}
       />
       <Tab.Screen
         name="PayslipsTab"
         component={PayslipsScreen}
-        options={{ title: 'Bulletins', headerTitle: 'Mes bulletins' }}
+        options={{ title: 'Bulletins', headerTitle: 'Mes bulletins', headerLeft: () => <HeaderLogo /> }}
       />
       <Tab.Screen
         name="ProfileTab"

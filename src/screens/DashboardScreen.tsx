@@ -363,12 +363,12 @@ export default function DashboardScreen() {
                 <Text style={styles.brandSub}>ERH</Text>
               </View>
             </View>
-            <View style={styles.avatarContainer}>
+            <TouchableOpacity style={styles.avatarContainer} onPress={() => navigation.navigate('ProfileTab')} activeOpacity={0.8}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{initials}</Text>
               </View>
               <View style={styles.onlineDot} />
-            </View>
+            </TouchableOpacity>
           </View>
 
           {/* Greeting */}
