@@ -47,6 +47,7 @@ function ProfileStackNavigator() {
         headerStyle: { backgroundColor: COLORS.primary },
         headerTintColor: COLORS.white,
         headerTitleStyle: { fontWeight: 'bold' },
+        headerTitleAlign: 'right',
         headerLeft: () => <HeaderLogo />,
       }}
     >
@@ -67,7 +68,7 @@ export default function MainNavigator() {
         headerStyle: { backgroundColor: COLORS.primary },
         headerTintColor: COLORS.white,
         headerTitleStyle: { fontWeight: 'bold', fontSize: 17 },
-        headerTitleAlign: 'center',
+        headerTitleAlign: 'right',
         tabBarActiveTintColor: COLORS.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarStyle: {
