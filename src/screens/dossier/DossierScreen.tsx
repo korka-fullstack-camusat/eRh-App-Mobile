@@ -130,17 +130,11 @@ const styles = StyleSheet.create({
 
   // ── Carte identité ──
   idCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    paddingVertical: 28,
+    backgroundColor: 'transparent',
+    paddingVertical: 20,
     paddingHorizontal: 20,
     alignItems: 'center',
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
+    marginBottom: 8,
   },
   avatarCircle: {
     width: 72, height: 72, borderRadius: 36,
