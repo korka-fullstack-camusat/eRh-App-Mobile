@@ -341,8 +341,8 @@ export default function DashboardScreen() {
   const progressPct = totalDays > 0 ? remainingDays / totalDays : 0;
 
   // ── Circular progress SVG ──
-  const circleSize = 70;
-  const strokeWidth = 7;
+  const circleSize = 52;
+  const strokeWidth = 6;
   const radius = (circleSize - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circleProgress.interpolate({
@@ -366,36 +366,34 @@ export default function DashboardScreen() {
       {/* ══════════════════════════════════════════
           HEADER — fixe, couvre la status bar
       ══════════════════════════════════════════ */}
-      <Animated.View style={[styles.header, { paddingTop: insets.top + 14, opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
-          {/* Top row: Logo + Avatar */}
-          <View style={styles.headerTopRow}>
-            <View style={styles.logoRow}>
-              <CamusatLogo size={36} showText={false} />
-              <View>
-                <Text style={styles.brandName}>camusat</Text>
-                <Text style={styles.brandSub}>ERH</Text>
-              </View>
+      <Animated.View style={[styles.header, { paddingTop: insets.top + 8, opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
+        {/* Ligne principale : Logo | Bonjour | Avatar */}
+        <View style={styles.headerTopRow}>
+          <View style={styles.logoRow}>
+            <CamusatLogo size={26} showText={false} />
+            <View>
+              <Text style={styles.brandName}>camusat</Text>
+              <Text style={styles.brandSub}>ERH</Text>
             </View>
-            <TouchableOpacity style={styles.avatarContainer} onPress={() => navigation.navigate('ProfileTab')} activeOpacity={0.8}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initials}</Text>
-              </View>
-              <View style={styles.onlineDot} />
-            </TouchableOpacity>
           </View>
-
-          {/* Greeting */}
           <Text style={styles.greeting}>Bonjour, {firstName} 👋</Text>
-          <Text style={styles.dateText}>{todayLabel}</Text>
-
-          {/* Badge fonction + matricule */}
-          {(fonction || matricule) && (
-            <View style={styles.fonctionBadge}>
-              <Text style={styles.fonctionText}>
-                {fonction}{fonction && matricule ? ' · ' : ''}{matricule}
-              </Text>
+          <TouchableOpacity style={styles.avatarContainer} onPress={() => navigation.navigate('ProfileTab')} activeOpacity={0.8}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{initials}</Text>
             </View>
+            <View style={styles.onlineDot} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Ligne secondaire : date + fonction */}
+        <View style={styles.headerSubRow}>
+          <Text style={styles.dateText}>{todayLabel}</Text>
+          {(fonction || matricule) && (
+            <Text style={styles.fonctionInline}>
+              {fonction}{fonction && matricule ? ' · ' : ''}{matricule}
+            </Text>
           )}
+        </View>
       </Animated.View>
 
       {/* ══════════════════════════════════════════
@@ -416,7 +414,7 @@ export default function DashboardScreen() {
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardTitleRow}>
               <View style={[styles.clockIconWrap, { backgroundColor: '#FEE2E2' }]}>
-                <Ionicons name="calendar" size={18} color={COLORS.danger} />
+                <Ionicons name="calendar" size={15} color={COLORS.danger} />
               </View>
               <Text style={styles.cardTitle}>Solde de congés</Text>
             </View>
@@ -476,7 +474,7 @@ export default function DashboardScreen() {
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardTitleRow}>
               <View style={[styles.clockIconWrap, { backgroundColor: '#F0FDF4' }]}>
-                <Ionicons name="document-text" size={18} color={COLORS.success} />
+                <Ionicons name="document-text" size={15} color={COLORS.success} />
               </View>
               <Text style={styles.cardTitle}>Bulletins de paie</Text>
             </View>
@@ -509,7 +507,7 @@ export default function DashboardScreen() {
           <View style={styles.cardHeaderRow}>
             <View style={styles.cardTitleRow}>
               <View style={styles.clockIconWrap}>
-                <Ionicons name="time-outline" size={18} color={COLORS.primary} />
+                <Ionicons name="time-outline" size={15} color={COLORS.primary} />
               </View>
               <Text style={styles.cardTitle}>Pointage du jour</Text>
             </View>
@@ -716,133 +714,135 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollView: { flex: 1, backgroundColor: COLORS.background },
   scroll: { flexGrow: 1 },
-  cardsContainer: { flex: 1, padding: 10, paddingBottom: 12, gap: 8 },
+  cardsContainer: { flex: 1, padding: 8, paddingBottom: 10, gap: 6 },
 
   // ── Header ──
   header: {
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 20,
-    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
   },
   headerTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 18,
+    marginBottom: 4,
   },
-  logoRow: {
+  headerSubRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   brandName: {
     color: COLORS.white,
-    fontSize: 18,
+    fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.3,
   },
   brandSub: {
     color: 'rgba(255,255,255,0.55)',
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '500',
     letterSpacing: 1,
-    marginTop: -2,
   },
   avatarContainer: {
     position: 'relative',
   },
   avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: COLORS.danger,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     color: COLORS.white,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
   },
   onlineDot: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 13,
-    height: 13,
-    borderRadius: 7,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
     backgroundColor: COLORS.success,
-    borderWidth: 2.5,
+    borderWidth: 2,
     borderColor: COLORS.primary,
   },
   greeting: {
     color: COLORS.white,
-    fontSize: 26,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+    textAlign: 'center',
   },
   dateText: {
     color: 'rgba(255,255,255,0.65)',
-    fontSize: 14,
-    marginTop: 4,
+    fontSize: 11,
     textTransform: 'capitalize',
+    flex: 1,
   },
-  fonctionBadge: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  fonctionText: {
+  fonctionInline: {
     color: 'rgba(255,255,255,0.85)',
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
 
   // ── Cards ──
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 12,
+    borderRadius: 14,
+    padding: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowRadius: 6,
     elevation: 3,
   },
   cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 6,
   },
   cardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   clockIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 8,
     backgroundColor: '#EFF6FF',
     justifyContent: 'center',
     alignItems: 'center',
   },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
     color: COLORS.text,
   },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     borderWidth: 1.5,
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
   statusDot: {
     width: 7,
@@ -864,13 +864,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
   },
   timeBox: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 14,
-    borderRadius: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1.5,
   },
   timeBoxActive: {
@@ -882,16 +881,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
   },
   timeBoxLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 1.5,
+    letterSpacing: 1.2,
     color: COLORS.textSecondary,
-    marginBottom: 6,
+    marginBottom: 3,
   },
   timeBoxValue: {
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
 
   // ── Pointage footer ──
@@ -901,32 +900,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    paddingTop: 12,
+    paddingTop: 6,
+    marginTop: 4,
   },
   ptDurationText: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textSecondary,
   },
   ptWeekLink: {},
   ptWeekLinkText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,
   },
 
   // ── Congés section ──
-  congesRow: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  congesRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   circleContainer: {
     position: 'relative', width: 70, height: 70,
     justifyContent: 'center', alignItems: 'center',
   },
   circleTextWrap: { position: 'absolute', justifyContent: 'center', alignItems: 'center' },
-  circleValue: { fontSize: 22, fontWeight: 'bold', color: COLORS.success },
+  circleValue: { fontSize: 16, fontWeight: 'bold', color: COLORS.success },
   congesInfo: { flex: 1 },
-  congesLabel: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
-  congesDetail: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 4 },
-  congesTypeName: { fontSize: 11, color: COLORS.textSecondary, fontStyle: 'italic', marginBottom: 6 },
-  progressBarBg: { height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, overflow: 'hidden' },
+  congesLabel: { fontSize: 13, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
+  congesDetail: { fontSize: 11, color: COLORS.textSecondary, marginBottom: 3 },
+  congesTypeName: { fontSize: 10, color: COLORS.textSecondary, fontStyle: 'italic', marginBottom: 4 },
+  progressBarBg: { height: 5, backgroundColor: '#E5E7EB', borderRadius: 3, overflow: 'hidden' },
   progressBarFill: { height: 6, backgroundColor: COLORS.success, borderRadius: 3 },
 
   // ── Toast glissant ──
