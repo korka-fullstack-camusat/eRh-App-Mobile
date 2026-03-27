@@ -255,12 +255,13 @@ export default function LeavesScreen() {
     );
   };
 
-  const annualBalance = balances.find(b =>
-    (b.leave_type_code || '').toUpperCase() === 'CA' ||
-    (b.leave_type_code || '').toUpperCase() === 'CP' ||
-    (b.leave_type_name || '').toLowerCase().includes('annuel') ||
-    (b.leave_type_name || '').toLowerCase().includes('congés payés')
-  );
+  const annualBalance =
+    balances.find(b =>
+      (b.leave_type_code || '').toUpperCase() === 'CA' ||
+      (b.leave_type_code || '').toUpperCase() === 'CP' ||
+      (b.leave_type_name || '').toLowerCase().includes('annuel') ||
+      (b.leave_type_name || '').toLowerCase().includes('congés payés')
+    ) ?? balances[0];
 
   const filteredRequests = searchQuery.trim()
     ? requests.filter(r =>
@@ -273,7 +274,21 @@ export default function LeavesScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
 
       {/* ── Solde congé annuel ── */}
-      {annualBalance && (() => {
+      {loading ? (
+        <View style={[styles.balanceHeader, { opacity: 0.5 }]}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.balanceHeaderName}>Congé Annuel</Text>
+            <Text style={styles.balanceHeaderSub}>Chargement...</Text>
+            <View style={styles.progressBar}>
+              <View style={[styles.progressFill, { width: '0%', backgroundColor: COLORS.primary }]} />
+            </View>
+          </View>
+          <View style={styles.balanceHeaderRight}>
+            <Text style={styles.balanceHeaderDays}>—</Text>
+            <Text style={styles.balanceHeaderLabel}>jours restants</Text>
+          </View>
+        </View>
+      ) : annualBalance ? (() => {
         const remaining = annualBalance.remaining_days ?? annualBalance.remaining ?? 0;
         const total = annualBalance.total_days ?? annualBalance.acquired ?? 0;
         const used = annualBalance.used_days ?? annualBalance.taken ?? 0;
@@ -293,7 +308,7 @@ export default function LeavesScreen() {
             </View>
           </View>
         );
-      })()}
+      })() : null}
 
       {/* ── Barre de recherche ── */}
       <View style={styles.searchBar}>
@@ -315,7 +330,7 @@ export default function LeavesScreen() {
 
       {/* ── Liste des demandes ── */}
       {loading ? (
-        <ActivityIndicator style={{ flex: 1 }} color={COLORS.primary} />
+        <ActivityIndicator style={{ marginTop: 32 }} color={COLORS.primary} />
       ) : (
         <FlatList
           data={filteredRequests}
