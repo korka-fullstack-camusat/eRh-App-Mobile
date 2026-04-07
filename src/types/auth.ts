@@ -20,4 +20,6 @@ export interface UserProfile {
   employee_matricule?: string;
   employee_name?: string;
   roles?: string[];
+  manager_level?: number | null;
+  is_department_head?: boolean;
 }

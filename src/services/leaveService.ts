@@ -55,3 +55,26 @@ export async function cancelLeaveRequest(id: number): Promise<LeaveRequest> {
   const { data } = await api.post<LeaveRequest>(`/api/leaves/requests/${id}/cancel/`);
   return data;
 }
+
+export async function getManagerPendingLeaves(managerEmployeeId: number): Promise<LeaveRequest[]> {
+  const { data } = await api.get('/api/leaves/requests/', {
+    params: { manager_employee_id: managerEmployeeId },
+  });
+  const all: LeaveRequest[] = Array.isArray(data) ? data : data?.results ?? [];
+  return all.filter(r => r.status === 'PENDING' || r.status === 'PENDING_SECOND');
+}
+
+export async function approveLeaveRequest(id: number, reviewerEmployeeId: number): Promise<LeaveRequest> {
+  const { data } = await api.post<LeaveRequest>(`/api/leaves/requests/${id}/approve/`, {
+    reviewer_id: reviewerEmployeeId,
+  });
+  return data;
+}
+
+export async function rejectLeaveRequest(id: number, reviewerEmployeeId: number, rejectReason: string): Promise<LeaveRequest> {
+  const { data } = await api.post<LeaveRequest>(`/api/leaves/requests/${id}/reject/`, {
+    reviewer_id: reviewerEmployeeId,
+    reject_reason: rejectReason,
+  });
+  return data;
+}

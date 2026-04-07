@@ -6,9 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/theme';
 import CamusatLogo from '@/components/CamusatLogo';
+import { useAuth } from '@/contexts/AuthContext';
 
 import DashboardScreen from '@/screens/DashboardScreen';
 import LeavesScreen from '@/screens/leaves/LeavesScreen';
+import LeaveApprobationScreen from '@/screens/leaves/LeaveApprobationScreen';
 import PayslipsScreen from '@/screens/payslips/PayslipsScreen';
 import DossierScreen from '@/screens/dossier/DossierScreen';
 import ChangePasswordScreen from '@/screens/auth/ChangePasswordScreen';
@@ -47,6 +49,7 @@ function CustomHeader({ title, onBack }: { title: string; onBack?: () => void })
 export type RootTabParamList = {
   DashboardTab: undefined;
   LeavesTab: undefined;
+  ApprobationTab: undefined;
   PayslipsTab: undefined;
   ProfileTab: undefined;
 };
@@ -82,10 +85,17 @@ function ProfileStackNavigator() {
   );
 }
 
+function isManager(roles?: string[]): boolean {
+  if (!roles) return false;
+  return roles.includes('manager1') || roles.includes('manager2') || roles.includes('rh');
+}
+
 export default function MainNavigator() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const bottomInset = Platform.OS === 'android' ? insets.bottom : 0;
   const tabBarHeight = 58 + bottomInset;
+  const managerAccess = isManager(user?.roles);
 
   return (
     <Tab.Navigator
@@ -102,10 +112,11 @@ export default function MainNavigator() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
-          if (route.name === 'DashboardTab')   iconName = focused ? 'home'          : 'home-outline';
-          else if (route.name === 'LeavesTab')   iconName = focused ? 'calendar'      : 'calendar-outline';
-          else if (route.name === 'PayslipsTab') iconName = focused ? 'document-text' : 'document-text-outline';
-          else if (route.name === 'ProfileTab')  iconName = focused ? 'person'        : 'person-outline';
+          if (route.name === 'DashboardTab')      iconName = focused ? 'home'             : 'home-outline';
+          else if (route.name === 'LeavesTab')    iconName = focused ? 'calendar'         : 'calendar-outline';
+          else if (route.name === 'ApprobationTab') iconName = focused ? 'checkmark-done' : 'checkmark-done-outline';
+          else if (route.name === 'PayslipsTab')  iconName = focused ? 'document-text'   : 'document-text-outline';
+          else if (route.name === 'ProfileTab')   iconName = focused ? 'person'           : 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
       })}
@@ -114,6 +125,10 @@ export default function MainNavigator() {
         options={{ title: 'Accueil', headerShown: false }} />
       <Tab.Screen name="LeavesTab" component={LeavesScreen}
         options={{ title: 'Congés', header: () => <CustomHeader title="Mes congés" /> }} />
+      {managerAccess && (
+        <Tab.Screen name="ApprobationTab" component={LeaveApprobationScreen}
+          options={{ title: 'Approbation', header: () => <CustomHeader title="Approbation congés" /> }} />
+      )}
       <Tab.Screen name="PayslipsTab" component={PayslipsScreen}
         options={{ title: 'Bulletins', header: () => <CustomHeader title="Mes bulletins" /> }} />
       <Tab.Screen name="ProfileTab" component={ProfileStackNavigator}
