@@ -8,33 +8,53 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  getManagerPendingLeaves,
+  getManagerLeaves,
   approveLeaveRequest,
   rejectLeaveRequest,
+  hrValidateLeaveRequest,
+  hrRejectLeaveRequest,
 } from '@/services/leaveService';
-import type { LeaveRequest } from '@/types/leave';
+import type { LeaveRequest, LeaveStatus } from '@/types/leave';
 import { COLORS } from '@/theme';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
+type Tab = 'pending' | 'history';
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  PENDING:        { label: 'En attente N+1',   color: '#F59E0B', bg: '#FFFBEB' },
+  PENDING_SECOND: { label: 'En attente N+2',   color: '#7C3AED', bg: '#F5F3FF' },
+  PENDING_RH:     { label: 'En attente RH',    color: '#2563EB', bg: '#EFF6FF' },
+  APPROVED:       { label: 'Approuvé',          color: COLORS.success, bg: '#ECFDF5' },
+  REJECTED:       { label: 'Rejeté',            color: COLORS.danger,  bg: '#FEF2F2' },
+  CANCELLED:      { label: 'Annulé',            color: COLORS.textSecondary, bg: '#F8FAFC' },
+  REVOKED:        { label: 'Révoqué',           color: '#B45309', bg: '#FFF7ED' },
+};
+
 function fmtDate(d: string) {
   try { return format(new Date(d), 'd MMM yyyy', { locale: fr }); } catch { return d; }
 }
+function fmtDateTime(d?: string | null) {
+  if (!d) return '';
+  try { return format(new Date(d), 'd MMM yyyy HH:mm', { locale: fr }); } catch { return d; }
+}
 
-const STATUS_LABEL: Record<string, string> = {
-  PENDING:        'En attente N+1',
-  PENDING_SECOND: 'En attente N+2',
-};
+function initials(name: string) {
+  return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+}
 
 export default function LeaveApprobationScreen() {
   const { user } = useAuth();
   const managerEmployeeId = user?.employee_id ?? null;
+  const isRh = user?.roles?.includes('rh') ?? false;
 
-  const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [tab, setTab] = useState<Tab>('pending');
+  const [pending, setPending] = useState<LeaveRequest[]>([]);
+  const [history, setHistory] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Selected request for detail/action modal
+  // Detail / action modal
   const [selected, setSelected] = useState<LeaveRequest | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
@@ -43,8 +63,12 @@ export default function LeaveApprobationScreen() {
   const load = useCallback(async () => {
     if (!managerEmployeeId) return;
     try {
-      const data = await getManagerPendingLeaves(managerEmployeeId);
-      setRequests(data);
+      const [p, h] = await Promise.all([
+        getManagerLeaves(managerEmployeeId, ['PENDING', 'PENDING_SECOND', 'PENDING_RH']),
+        getManagerLeaves(managerEmployeeId, ['APPROVED', 'REJECTED']),
+      ]);
+      setPending(p);
+      setHistory(h);
     } catch { /* keep stale data */ }
   }, [managerEmployeeId]);
 
@@ -65,10 +89,12 @@ export default function LeaveApprobationScreen() {
     setShowRejectInput(false);
   };
 
+  // ── Actions ──────────────────────────────────────────────────────────────
+
   const handleApprove = (item: LeaveRequest) => {
     Alert.alert(
       'Approuver la demande',
-      `Confirmer l'approbation du congé de ${item.employee_name ?? 'cet employé'} ?`,
+      `Confirmer l\'approbation du congé de ${item.employee.full_name} ?`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -77,13 +103,16 @@ export default function LeaveApprobationScreen() {
             if (!managerEmployeeId) return;
             setSubmitting(true);
             try {
-              await approveLeaveRequest(item.id, managerEmployeeId);
+              if (item.status === 'PENDING_RH' && isRh) {
+                await hrValidateLeaveRequest(item.id, managerEmployeeId);
+              } else {
+                await approveLeaveRequest(item.id, managerEmployeeId);
+              }
               closeModal();
               await load();
               Alert.alert('Succès', 'La demande a été approuvée.');
             } catch (e: any) {
-              const msg = e?.response?.data?.error || 'Erreur lors de l\'approbation.';
-              Alert.alert('Erreur', msg);
+              Alert.alert('Erreur', e?.response?.data?.error || 'Erreur lors de l\'approbation.');
             } finally {
               setSubmitting(false);
             }
@@ -101,73 +130,170 @@ export default function LeaveApprobationScreen() {
     }
     setSubmitting(true);
     try {
-      await rejectLeaveRequest(selected.id, managerEmployeeId, rejectReason.trim());
+      if (selected.status === 'PENDING_RH' && isRh) {
+        await hrRejectLeaveRequest(selected.id, rejectReason.trim(), managerEmployeeId);
+      } else {
+        await rejectLeaveRequest(selected.id, managerEmployeeId, rejectReason.trim());
+      }
       closeModal();
       await load();
       Alert.alert('Succès', 'La demande a été rejetée.');
     } catch (e: any) {
-      const msg = e?.response?.data?.error || 'Erreur lors du rejet.';
-      Alert.alert('Erreur', msg);
+      Alert.alert('Erreur', e?.response?.data?.error || 'Erreur lors du rejet.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const renderItem = ({ item }: { item: LeaveRequest }) => {
-    const statusLabel = STATUS_LABEL[item.status] ?? item.status;
-    const isPendingSecond = item.status === 'PENDING_SECOND';
-    const badgeColor = isPendingSecond ? '#8B5CF6' : '#F59E0B';
+  // ── Validation chain (web-style) ─────────────────────────────────────────
+
+  const renderChain = (item: LeaveRequest) => {
+    const emp = item.employee;
+    const showN2 = !!(item.requires_second_approval || item.second_reviewer || emp?.n2_manager_id);
+
+    const circleColor = {
+      n1: item.reviewed_by    ? COLORS.success
+        : item.status === 'PENDING' ? '#F59E0B'
+        : COLORS.border,
+      n2: item.second_reviewer && item.second_reviewed_at ? COLORS.success
+        : item.status === 'PENDING_SECOND' ? '#7C3AED'
+        : COLORS.border,
+      rh: item.hr_reviewer    ? COLORS.success
+        : item.status === 'PENDING_RH' ? '#2563EB'
+        : COLORS.border,
+    };
 
     return (
-      <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={() => setSelected(item)}>
-        <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.employeeName}>{item.employee_name ?? `Employé #${item.employee}`}</Text>
-            {item.matricule ? <Text style={styles.matricule}>{item.matricule}</Text> : null}
-            {item.service ? <Text style={styles.service}>{item.service}</Text> : null}
+      <View style={styles.chainBox}>
+        <Text style={styles.chainBoxTitle}>Chaîne de validation</Text>
+        <View style={{ gap: 10 }}>
+          {/* N+1 */}
+          <View style={styles.chainRow}>
+            <View style={[styles.chainCircle, { backgroundColor: circleColor.n1 }]}>
+              <Text style={styles.chainCircleText}>{item.reviewed_by ? '✓' : '1'}</Text>
+            </View>
+            <Text style={styles.chainLevel}>N+1</Text>
+            <Text style={styles.chainDash}>—</Text>
+            <Text style={[styles.chainName, item.reviewed_by ? styles.chainDone : styles.chainWait]} numberOfLines={1}>
+              {item.reviewed_by
+                ? `${item.reviewed_by.full_name}${item.reviewed_at ? ` (${fmtDate(item.reviewed_at)})` : ''}`
+                : emp?.n1_manager_name ?? 'Non défini'}
+            </Text>
           </View>
-          <View style={[styles.badge, { backgroundColor: `${badgeColor}18` }]}>
-            <Ionicons name="time-outline" size={12} color={badgeColor} style={{ marginRight: 4 }} />
-            <Text style={[styles.badgeText, { color: badgeColor }]}>{statusLabel}</Text>
+
+          {/* N+2 (conditionnelle) */}
+          {showN2 && (
+            <View style={styles.chainRow}>
+              <View style={[styles.chainCircle, { backgroundColor: circleColor.n2 }]}>
+                <Text style={styles.chainCircleText}>
+                  {item.second_reviewer && item.second_reviewed_at ? '✓' : '2'}
+                </Text>
+              </View>
+              <Text style={styles.chainLevel}>N+2</Text>
+              <Text style={styles.chainDash}>—</Text>
+              <Text style={[styles.chainName, item.second_reviewer && item.second_reviewed_at ? styles.chainDone : styles.chainWait]} numberOfLines={1}>
+                {item.second_reviewer
+                  ? `${item.second_reviewer.full_name}${item.second_reviewed_at ? ` (${fmtDate(item.second_reviewed_at)})` : ''}`
+                  : emp?.n2_manager_name ?? 'Non défini'}
+              </Text>
+            </View>
+          )}
+
+          {/* RH */}
+          <View style={styles.chainRow}>
+            <View style={[styles.chainCircle, { backgroundColor: circleColor.rh }]}>
+              <Text style={styles.chainCircleText}>{item.hr_reviewer ? '✓' : showN2 ? '3' : '2'}</Text>
+            </View>
+            <Text style={styles.chainLevel}>RH</Text>
+            <Text style={styles.chainDash}>—</Text>
+            <Text style={[styles.chainName, item.hr_reviewer ? styles.chainDone : styles.chainWait]} numberOfLines={1}>
+              {item.hr_reviewer
+                ? `${item.hr_reviewer.full_name}${item.hr_reviewed_at ? ` (${fmtDate(item.hr_reviewed_at)})` : ''}`
+                : 'En attente'}
+            </Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  // ── Request card ──────────────────────────────────────────────────────────
+
+  const renderCard = ({ item }: { item: LeaveRequest }) => {
+    const cfg = STATUS_CONFIG[item.status] ?? { label: item.status, color: COLORS.textSecondary, bg: COLORS.background };
+    const isPending = tab === 'pending';
+
+    return (
+      <TouchableOpacity style={styles.card} activeOpacity={0.75} onPress={() => setSelected(item)}>
+        <View style={styles.cardTop}>
+          {/* Avatar */}
+          <View style={[styles.avatar, { backgroundColor: COLORS.primary }]}>
+            <Text style={styles.avatarText}>{initials(item.employee.full_name)}</Text>
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.cardName}>{item.employee.full_name}</Text>
+            <Text style={styles.cardMeta}>
+              {[item.employee.matricule, item.employee.service, item.employee.fonction].filter(Boolean).join(' · ')}
+            </Text>
+          </View>
+
+          {/* Status badge */}
+          <View style={[styles.badge, { backgroundColor: cfg.bg }]}>
+            <Text style={[styles.badgeText, { color: cfg.color }]}>{cfg.label}</Text>
           </View>
         </View>
 
         <View style={styles.cardBody}>
           <View style={styles.infoRow}>
-            <Ionicons name="document-text-outline" size={14} color={COLORS.textSecondary} />
+            <Ionicons name="document-text-outline" size={13} color={COLORS.textSecondary} />
             <Text style={styles.infoText}>{item.leave_type_name}</Text>
           </View>
           <View style={styles.infoRow}>
-            <Ionicons name="calendar-outline" size={14} color={COLORS.textSecondary} />
+            <Ionicons name="calendar-outline" size={13} color={COLORS.textSecondary} />
             <Text style={styles.infoText}>
               {fmtDate(item.start_date)} → {fmtDate(item.end_date)}
-              {'  '}
-              <Text style={styles.duration}>{item.duration_days}j</Text>
+              {'  '}<Text style={styles.duration}>{item.duration_days}j</Text>
             </Text>
           </View>
         </View>
 
-        <View style={styles.cardActions}>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.approveBtn]}
-            onPress={() => handleApprove(item)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="checkmark" size={16} color={COLORS.white} />
-            <Text style={styles.actionBtnText}>Approuver</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.rejectBtn]}
-            onPress={() => { setSelected(item); setShowRejectInput(true); }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="close" size={16} color={COLORS.white} />
-            <Text style={styles.actionBtnText}>Rejeter</Text>
-          </TouchableOpacity>
-        </View>
+        {/* Quick actions for pending requests */}
+        {isPending && (
+          <View style={styles.cardActions}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.approveBtn]}
+              onPress={() => handleApprove(item)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark" size={15} color={COLORS.white} />
+              <Text style={styles.actionBtnText}>Approuver</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.rejectBtn]}
+              onPress={() => { setSelected(item); setShowRejectInput(true); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close" size={15} color={COLORS.white} />
+              <Text style={styles.actionBtnText}>Rejeter</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Rejection reason in history */}
+        {!isPending && item.reject_reason && (
+          <View style={styles.rejectReason}>
+            <Ionicons name="alert-circle-outline" size={13} color={COLORS.danger} />
+            <Text style={styles.rejectReasonText} numberOfLines={2}>{item.reject_reason}</Text>
+          </View>
+        )}
       </TouchableOpacity>
     );
   };
+
+  // ── Source list ───────────────────────────────────────────────────────────
+
+  const source = tab === 'pending' ? pending : history;
 
   if (!managerEmployeeId) {
     return (
@@ -182,34 +308,55 @@ export default function LeaveApprobationScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+
+      {/* ── Tabs ── */}
+      <View style={styles.tabBar}>
+        {(['pending', 'history'] as Tab[]).map(t => (
+          <TouchableOpacity
+            key={t}
+            style={[styles.tab, tab === t && styles.tabActive]}
+            onPress={() => setTab(t)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.tabLabel, tab === t && styles.tabLabelActive]}>
+              {t === 'pending' ? 'En attente' : 'Historique'}
+            </Text>
+            {(t === 'pending' ? pending : history).length > 0 && (
+              <View style={[styles.tabBadge, tab === t && styles.tabBadgeActive]}>
+                <Text style={[styles.tabBadgeText, tab === t && styles.tabBadgeTextActive]}>
+                  {(t === 'pending' ? pending : history).length}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* ── List ── */}
       {loading ? (
         <ActivityIndicator style={{ marginTop: 40 }} color={COLORS.primary} />
       ) : (
         <FlatList
-          data={requests}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
+          data={source}
+          keyExtractor={item => String(item.id)}
+          renderItem={renderCard}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
-          ListHeaderComponent={
-            <View style={styles.listHeader}>
-              <Text style={styles.listHeaderTitle}>Demandes en attente</Text>
-              <View style={styles.countBadge}>
-                <Text style={styles.countText}>{requests.length}</Text>
-              </View>
-            </View>
-          }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Ionicons name="checkmark-circle-outline" size={56} color={COLORS.border} />
-              <Text style={styles.emptyText}>Aucune demande en attente</Text>
-              <Text style={styles.emptySubText}>Toutes les demandes ont été traitées</Text>
+              <Ionicons
+                name={tab === 'pending' ? 'checkmark-circle-outline' : 'document-text-outline'}
+                size={56} color={COLORS.border}
+              />
+              <Text style={styles.emptyText}>
+                {tab === 'pending' ? 'Aucune demande en attente' : 'Aucun historique'}
+              </Text>
             </View>
           }
         />
       )}
 
-      {/* Detail / Reject Modal */}
+      {/* ── Detail / Reject Modal ── */}
       <Modal visible={!!selected} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modal}>
           {selected && (
@@ -222,92 +369,138 @@ export default function LeaveApprobationScreen() {
               </View>
 
               <ScrollView contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
-                {/* Employee info */}
+
+                {/* Status banner */}
+                {(() => {
+                  const cfg = STATUS_CONFIG[selected.status];
+                  return cfg ? (
+                    <View style={[styles.statusBanner, { backgroundColor: cfg.bg }]}>
+                      <View style={[styles.statusDot, { backgroundColor: cfg.color }]} />
+                      <Text style={[styles.statusBannerText, { color: cfg.color }]}>{cfg.label}</Text>
+                    </View>
+                  ) : null;
+                })()}
+
+                {/* Employee card */}
                 <View style={styles.detailCard}>
-                  <Text style={styles.detailEmployeeName}>{selected.employee_name ?? `Employé #${selected.employee}`}</Text>
-                  {selected.matricule && <Text style={styles.detailMeta}>{selected.matricule}</Text>}
-                  {selected.service && <Text style={styles.detailMeta}>{selected.service}</Text>}
+                  <View style={[styles.avatar, { backgroundColor: COLORS.primary, width: 44, height: 44, borderRadius: 22 }]}>
+                    <Text style={[styles.avatarText, { fontSize: 16 }]}>{initials(selected.employee.full_name)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.detailName}>{selected.employee.full_name}</Text>
+                    <Text style={styles.detailMeta}>
+                      {[selected.employee.matricule, selected.employee.service, selected.employee.fonction].filter(Boolean).join(' · ')}
+                    </Text>
+                  </View>
                 </View>
 
                 {/* Leave info */}
-                <View style={styles.detailCard}>
+                <View style={styles.infoCard}>
                   <DetailRow label="Type de congé" value={selected.leave_type_name} />
                   <DetailRow label="Du" value={fmtDate(selected.start_date)} />
                   <DetailRow label="Au" value={fmtDate(selected.end_date)} />
                   <DetailRow label="Durée" value={`${selected.duration_days} jour(s)`} />
+                  <DetailRow label="Soumis le" value={fmtDateTime(selected.created_at)} />
                   {(selected.reason || selected.motif) && (
-                    <View style={styles.reasonBlock}>
-                      <Text style={styles.reasonLabel}>Motif</Text>
-                      <Text style={styles.reasonText}>{selected.reason || selected.motif}</Text>
+                    <View style={styles.motifBlock}>
+                      <Text style={styles.motifLabel}>Motif</Text>
+                      <Text style={styles.motifText}>{selected.reason || selected.motif}</Text>
                     </View>
                   )}
                   {selected.justification_document && (
-                    <View style={styles.infoRow}>
-                      <Ionicons name="attach-outline" size={16} color={COLORS.primary} />
+                    <View style={[styles.infoRow, { marginTop: 8 }]}>
+                      <Ionicons name="attach-outline" size={14} color={COLORS.primary} />
                       <Text style={[styles.infoText, { color: COLORS.primary }]}>Justificatif joint</Text>
                     </View>
                   )}
                 </View>
 
+                {/* Validation chain */}
+                {renderChain(selected)}
+
+                {/* Reject reason */}
+                {selected.reject_reason && (
+                  <View style={styles.rejectBlock}>
+                    <Ionicons name="alert-circle" size={16} color={COLORS.danger} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rejectBlockTitle}>Motif du rejet</Text>
+                      <Text style={styles.rejectBlockText}>{selected.reject_reason}</Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Revoke reason */}
+                {selected.revoke_reason && (
+                  <View style={[styles.rejectBlock, { backgroundColor: '#FFF7ED', borderColor: '#B45309' }]}>
+                    <Ionicons name="warning" size={16} color="#B45309" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.rejectBlockTitle, { color: '#B45309' }]}>Motif de révocation</Text>
+                      <Text style={styles.rejectBlockText}>{selected.revoke_reason}</Text>
+                    </View>
+                  </View>
+                )}
+
                 {/* Reject input */}
                 {showRejectInput && (
-                  <View style={styles.rejectSection}>
-                    <Text style={styles.rejectLabel}>Motif du rejet *</Text>
+                  <View style={styles.rejectInputBox}>
+                    <Text style={styles.rejectInputLabel}>Motif du rejet *</Text>
                     <TextInput
                       style={styles.rejectInput}
                       value={rejectReason}
                       onChangeText={setRejectReason}
                       placeholder="Saisir le motif du rejet..."
                       placeholderTextColor={COLORS.textSecondary}
-                      multiline
-                      numberOfLines={3}
+                      multiline numberOfLines={3}
                     />
                   </View>
                 )}
 
-                {/* Action buttons */}
-                <View style={styles.modalActions}>
-                  {!showRejectInput ? (
-                    <>
-                      <TouchableOpacity
-                        style={[styles.modalBtn, styles.approveBtn, submitting && { opacity: 0.7 }]}
-                        onPress={() => handleApprove(selected)}
-                        disabled={submitting}
-                      >
-                        {submitting
-                          ? <ActivityIndicator color={COLORS.white} size="small" />
-                          : <><Ionicons name="checkmark-circle" size={18} color={COLORS.white} /><Text style={styles.modalBtnText}>Approuver</Text></>
-                        }
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modalBtn, styles.rejectBtn]}
-                        onPress={() => setShowRejectInput(true)}
-                      >
-                        <Ionicons name="close-circle" size={18} color={COLORS.white} />
-                        <Text style={styles.modalBtnText}>Rejeter</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <>
-                      <TouchableOpacity
-                        style={[styles.modalBtn, styles.rejectBtn, submitting && { opacity: 0.7 }]}
-                        onPress={handleReject}
-                        disabled={submitting}
-                      >
-                        {submitting
-                          ? <ActivityIndicator color={COLORS.white} size="small" />
-                          : <><Ionicons name="close-circle" size={18} color={COLORS.white} /><Text style={styles.modalBtnText}>Confirmer le rejet</Text></>
-                        }
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.modalBtn, styles.cancelBtn]}
-                        onPress={() => { setShowRejectInput(false); setRejectReason(''); }}
-                      >
-                        <Text style={[styles.modalBtnText, { color: COLORS.text }]}>Annuler</Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
+                {/* Action buttons — only for pending */}
+                {tab === 'pending' && (
+                  <View style={styles.modalActions}>
+                    {!showRejectInput ? (
+                      <>
+                        <TouchableOpacity
+                          style={[styles.modalBtn, styles.approveBtn, submitting && styles.disabled]}
+                          onPress={() => handleApprove(selected)}
+                          disabled={submitting}
+                        >
+                          {submitting
+                            ? <ActivityIndicator color={COLORS.white} size="small" />
+                            : <><Ionicons name="checkmark-circle" size={18} color={COLORS.white} /><Text style={styles.modalBtnText}>Approuver</Text></>
+                          }
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.modalBtn, styles.rejectBtn]}
+                          onPress={() => setShowRejectInput(true)}
+                        >
+                          <Ionicons name="close-circle" size={18} color={COLORS.white} />
+                          <Text style={styles.modalBtnText}>Rejeter</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        <TouchableOpacity
+                          style={[styles.modalBtn, styles.rejectBtn, submitting && styles.disabled]}
+                          onPress={handleReject}
+                          disabled={submitting}
+                        >
+                          {submitting
+                            ? <ActivityIndicator color={COLORS.white} size="small" />
+                            : <><Ionicons name="close-circle" size={18} color={COLORS.white} /><Text style={styles.modalBtnText}>Confirmer le rejet</Text></>
+                          }
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.modalBtn, { backgroundColor: COLORS.border }]}
+                          onPress={() => { setShowRejectInput(false); setRejectReason(''); }}
+                        >
+                          <Text style={[styles.modalBtnText, { color: COLORS.text }]}>Annuler</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                )}
+
               </ScrollView>
             </>
           )}
@@ -330,51 +523,67 @@ function DetailRow({ label, value }: { label: string; value?: string | null }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
 
-  list: { padding: 12, paddingTop: 4, gap: 12, paddingBottom: 30 },
+  // Tabs
+  tabBar: {
+    flexDirection: 'row', backgroundColor: COLORS.white,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    paddingHorizontal: 12, paddingTop: 8,
+  },
+  tab: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8,
+    marginBottom: 4,
+  },
+  tabActive: { backgroundColor: `${COLORS.primary}12` },
+  tabLabel: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  tabLabelActive: { color: COLORS.primary },
+  tabBadge: {
+    backgroundColor: COLORS.border, borderRadius: 10,
+    paddingHorizontal: 6, paddingVertical: 1,
+  },
+  tabBadgeActive: { backgroundColor: COLORS.primary },
+  tabBadgeText: { fontSize: 11, fontWeight: '700', color: COLORS.textSecondary },
+  tabBadgeTextActive: { color: COLORS.white },
 
-  listHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 8,
-  },
-  listHeaderTitle: {
-    fontSize: 12, fontWeight: '700', color: COLORS.textSecondary,
-    textTransform: 'uppercase', letterSpacing: 0.5,
-  },
-  countBadge: {
-    backgroundColor: COLORS.accent, borderRadius: 12,
-    paddingHorizontal: 8, paddingVertical: 2,
-  },
-  countText: { fontSize: 12, fontWeight: '700', color: COLORS.white },
+  // List
+  list: { padding: 12, gap: 10, paddingBottom: 30 },
 
+  // Card
   card: {
     backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 1, shadowRadius: 4, elevation: 2,
+    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
-  employeeName: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 2 },
-  matricule: { fontSize: 12, color: COLORS.primary, fontWeight: '600' },
-  service: { fontSize: 12, color: COLORS.textSecondary },
-  badge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
+  avatar: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarText: { fontSize: 13, fontWeight: '700', color: COLORS.white },
+  cardName: { fontSize: 14, fontWeight: '700', color: COLORS.text },
+  cardMeta: { fontSize: 11, color: COLORS.textSecondary, marginTop: 1 },
+  badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20, alignSelf: 'flex-start' },
   badgeText: { fontSize: 11, fontWeight: '600' },
-
-  cardBody: { gap: 4, marginBottom: 12 },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  cardBody: { gap: 4, marginBottom: 10 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   infoText: { fontSize: 13, color: COLORS.text },
   duration: { fontWeight: '700', color: COLORS.primary },
-
   cardActions: { flexDirection: 'row', gap: 8 },
   actionBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 9, borderRadius: 10,
+    gap: 5, paddingVertical: 8, borderRadius: 10,
   },
   approveBtn: { backgroundColor: COLORS.success },
-  rejectBtn: { backgroundColor: COLORS.danger },
-  cancelBtn: { backgroundColor: COLORS.border },
-  actionBtnText: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
+  rejectBtn:  { backgroundColor: COLORS.danger },
+  actionBtnText: { color: COLORS.white, fontSize: 13, fontWeight: '700' },
+  rejectReason: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 5, marginTop: 8,
+    backgroundColor: '#FEF2F2', borderRadius: 8, padding: 8,
+  },
+  rejectReasonText: { fontSize: 12, color: COLORS.danger, flex: 1 },
 
+  // Empty
   empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
-  emptyText: { color: COLORS.text, fontSize: 16, fontWeight: '600' },
-  emptySubText: { color: COLORS.textSecondary, fontSize: 14 },
+  emptyText: { fontSize: 16, fontWeight: '600', color: COLORS.text },
 
   // Modal
   modal: { flex: 1, backgroundColor: COLORS.background },
@@ -384,36 +593,81 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 17, fontWeight: 'bold', color: COLORS.text },
   modalContent: { padding: 16, paddingBottom: 40, gap: 12 },
-  modalActions: { flexDirection: 'column', gap: 10, marginTop: 8 },
-  modalBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 14, borderRadius: 12,
+
+  statusBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    borderRadius: 12, padding: 12,
   },
-  modalBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  statusBannerText: { fontSize: 15, fontWeight: '700' },
 
   detailCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
     shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
   },
-  detailEmployeeName: { fontSize: 16, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
-  detailMeta: { fontSize: 13, color: COLORS.textSecondary },
+  detailName: { fontSize: 15, fontWeight: '700', color: COLORS.text },
+  detailMeta: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
+
+  infoCard: {
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
+    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
+  },
   detailRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.background,
   },
   detailLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500' },
   detailValue: { fontSize: 14, color: COLORS.text, fontWeight: '600', textAlign: 'right', flex: 1, marginLeft: 16 },
-  reasonBlock: { paddingTop: 10 },
-  reasonLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500', marginBottom: 4 },
-  reasonText: { fontSize: 14, color: COLORS.text, lineHeight: 20 },
+  motifBlock: { paddingTop: 10 },
+  motifLabel: { fontSize: 13, color: COLORS.textSecondary, fontWeight: '500', marginBottom: 4 },
+  motifText: { fontSize: 14, color: COLORS.text, lineHeight: 20 },
 
-  rejectSection: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 16,
+  // Validation chain
+  chainBox: {
+    backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: COLORS.border,
+    borderRadius: 14, padding: 14,
+  },
+  chainBoxTitle: {
+    fontSize: 11, fontWeight: '700', color: COLORS.textSecondary,
+    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12,
+  },
+  chainRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  chainCircle: {
+    width: 22, height: 22, borderRadius: 11,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  chainCircleText: { fontSize: 11, fontWeight: '700', color: COLORS.white },
+  chainLevel: { fontSize: 13, fontWeight: '600', color: COLORS.text, width: 28 },
+  chainDash: { fontSize: 13, color: COLORS.textSecondary },
+  chainName: { fontSize: 13, flex: 1 },
+  chainDone: { color: COLORS.success, fontWeight: '600' },
+  chainWait: { color: COLORS.textSecondary },
+
+  // Reject blocks
+  rejectBlock: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: COLORS.danger,
+    borderRadius: 12, padding: 12,
+  },
+  rejectBlockTitle: { fontSize: 13, fontWeight: '700', color: COLORS.danger, marginBottom: 2 },
+  rejectBlockText: { fontSize: 13, color: COLORS.text, lineHeight: 18 },
+
+  rejectInputBox: {
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
     shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
   },
-  rejectLabel: { fontSize: 14, fontWeight: '600', color: COLORS.danger, marginBottom: 8 },
+  rejectInputLabel: { fontSize: 14, fontWeight: '600', color: COLORS.danger, marginBottom: 8 },
   rejectInput: {
     borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 12,
     fontSize: 14, color: COLORS.text, minHeight: 80, textAlignVertical: 'top',
   },
+
+  modalActions: { gap: 10 },
+  modalBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 14, borderRadius: 12,
+  },
+  modalBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
+  disabled: { opacity: 0.6 },
 });

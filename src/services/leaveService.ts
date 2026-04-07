@@ -16,6 +16,11 @@ export async function getLeaveTypes(): Promise<LeaveType[]> {
   return Array.isArray(data) ? data : data?.results ?? [];
 }
 
+export async function getApprovalChain(employeeId: number): Promise<ApprovalChain> {
+  const { data } = await api.get<ApprovalChain>(`/api/leaves/requests/approval-chain/${employeeId}/`);
+  return data;
+}
+
 export async function createLeaveRequest(payload: {
   employee: number;
   leave_type: number;
@@ -56,17 +61,20 @@ export async function cancelLeaveRequest(id: number): Promise<LeaveRequest> {
   return data;
 }
 
-export async function getApprovalChain(employeeId: number): Promise<ApprovalChain> {
-  const { data } = await api.get<ApprovalChain>(`/api/leaves/requests/approval-chain/${employeeId}/`);
-  return data;
-}
+// ── Manager / approval ────────────────────────────────────────────────────────
 
-export async function getManagerPendingLeaves(managerEmployeeId: number): Promise<LeaveRequest[]> {
-  const { data } = await api.get('/api/leaves/requests/', {
-    params: { manager_employee_id: managerEmployeeId },
-  });
-  const all: LeaveRequest[] = Array.isArray(data) ? data : data?.results ?? [];
-  return all.filter(r => r.status === 'PENDING' || r.status === 'PENDING_SECOND');
+export async function getManagerLeaves(
+  managerEmployeeId: number,
+  statuses: string[],
+): Promise<LeaveRequest[]> {
+  const results = await Promise.all(
+    statuses.map(s =>
+      api.get('/api/leaves/requests/', {
+        params: { manager_employee_id: managerEmployeeId, status: s },
+      }).then(r => (Array.isArray(r.data) ? r.data : r.data?.results ?? []) as LeaveRequest[]),
+    ),
+  );
+  return results.flat();
 }
 
 export async function approveLeaveRequest(id: number, reviewerEmployeeId: number): Promise<LeaveRequest> {
@@ -76,10 +84,41 @@ export async function approveLeaveRequest(id: number, reviewerEmployeeId: number
   return data;
 }
 
-export async function rejectLeaveRequest(id: number, reviewerEmployeeId: number, rejectReason: string): Promise<LeaveRequest> {
+export async function rejectLeaveRequest(
+  id: number,
+  reviewerEmployeeId: number,
+  rejectReason: string,
+): Promise<LeaveRequest> {
   const { data } = await api.post<LeaveRequest>(`/api/leaves/requests/${id}/reject/`, {
     reviewer_id: reviewerEmployeeId,
     reject_reason: rejectReason,
   });
   return data;
+}
+
+export async function hrValidateLeaveRequest(
+  id: number,
+  hrReviewerEmployeeId?: number,
+): Promise<LeaveRequest> {
+  const { data } = await api.post<LeaveRequest>(`/api/leaves/requests/${id}/hr_validate/`, {
+    hr_reviewer_id: hrReviewerEmployeeId,
+  });
+  return data;
+}
+
+export async function hrRejectLeaveRequest(
+  id: number,
+  rejectReason: string,
+  hrReviewerEmployeeId?: number,
+): Promise<LeaveRequest> {
+  const { data } = await api.post<LeaveRequest>(`/api/leaves/requests/${id}/hr_reject/`, {
+    reject_reason: rejectReason,
+    hr_reviewer_id: hrReviewerEmployeeId,
+  });
+  return data;
+}
+
+// Kept for backward compat
+export async function getManagerPendingLeaves(managerEmployeeId: number): Promise<LeaveRequest[]> {
+  return getManagerLeaves(managerEmployeeId, ['PENDING', 'PENDING_SECOND']);
 }

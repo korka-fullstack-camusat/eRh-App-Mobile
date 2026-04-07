@@ -7,6 +7,18 @@ export type LeaveStatus =
   | 'CANCELLED'
   | 'REVOKED';
 
+export interface EmployeeMini {
+  id: number;
+  matricule?: string;
+  full_name: string;
+  fonction?: string;
+  service?: string;
+  n1_manager_id?: number | null;
+  n2_manager_id?: number | null;
+  n1_manager_name?: string | null;
+  n2_manager_name?: string | null;
+}
+
 export interface LeaveType {
   id: number;
   code: string;
@@ -22,7 +34,8 @@ export interface LeaveType {
 
 export interface LeaveRequest {
   id: number;
-  employee: number;
+  employee: EmployeeMini;
+  // Backward compat (used in some services)
   employee_name?: string;
   matricule?: string;
   service?: string;
@@ -32,30 +45,40 @@ export interface LeaveRequest {
   start_date: string;
   end_date: string;
   duration_days: number;
+  days?: string;
   reason?: string;
   motif?: string;
   status: LeaveStatus;
+  status_label?: string;
   created_at: string;
   // N+1 approval
-  reviewed_by?: string;
-  reviewed_at?: string;
+  reviewed_by?: EmployeeMini | null;
+  reviewed_at?: string | null;
   reviewer_comment?: string;
-  // N+2 approval
-  second_reviewer?: string;
-  second_reviewed_at?: string;
-  // HR validation
-  hr_reviewer?: string;
-  hr_reviewed_at?: string;
-  // Rejection/Revocation
   reject_reason?: string;
+  // N+2 approval
+  requires_second_approval?: boolean;
+  second_reviewer?: EmployeeMini | null;
+  second_reviewed_at?: string | null;
+  // HR validation
+  hr_reviewer?: EmployeeMini | null;
+  hr_reviewed_at?: string | null;
+  // Revocation
   revoke_reason?: string;
+  revoked_by?: EmployeeMini | null;
+  revoked_at?: string | null;
   // Justification
-  justification_document?: string;
+  justification_document?: string | null;
   justification_validated?: boolean;
+  justification_validated_by?: EmployeeMini | null;
+  justification_validated_at?: string | null;
+  justification_deadline?: string | null;
+  justification_pending?: boolean;
+  marked_as_absent?: boolean;
 }
 
 export interface ApprovalStep {
-  level: string;          // "N+1", "N+2", "DG", "RH"
+  level: string;
   approver_id?: number | null;
   approver_name?: string | null;
   is_on_leave?: boolean;
