@@ -1,5 +1,5 @@
 import api from '@/api/axios';
-import type { LeaveRequest, LeaveBalance, LeaveType } from '@/types/leave';
+import type { LeaveRequest, LeaveBalance, LeaveType, ApprovalChain } from '@/types/leave';
 
 export async function getMyLeaveRequests(employeeId: number): Promise<LeaveRequest[]> {
   const { data } = await api.get(`/api/leaves/requests/employee/${employeeId}/`);
@@ -53,6 +53,11 @@ export async function createLeaveRequest(payload: {
 
 export async function cancelLeaveRequest(id: number): Promise<LeaveRequest> {
   const { data } = await api.post<LeaveRequest>(`/api/leaves/requests/${id}/cancel/`);
+  return data;
+}
+
+export async function getApprovalChain(employeeId: number): Promise<ApprovalChain> {
+  const { data } = await api.get<ApprovalChain>(`/api/leaves/requests/approval-chain/${employeeId}/`);
   return data;
 }
 

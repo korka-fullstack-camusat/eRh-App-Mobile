@@ -10,8 +10,9 @@ import { useEmployee } from '@/contexts/EmployeeContext';
 import {
   getMyLeaveRequests, getMyLeaveBalances,
   getLeaveTypes, createLeaveRequest, cancelLeaveRequest,
+  getApprovalChain,
 } from '@/services/leaveService';
-import type { LeaveRequest, LeaveBalance, LeaveType, LeaveStatus } from '@/types/leave';
+import type { LeaveRequest, LeaveBalance, LeaveType, LeaveStatus, ApprovalChain } from '@/types/leave';
 import { COLORS } from '@/theme';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -50,6 +51,8 @@ export default function LeavesScreen() {
 
   // Detail modal
   const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
+  const [approvalChain, setApprovalChain] = useState<ApprovalChain | null>(null);
+  const [chainLoading, setChainLoading] = useState(false);
 
   // Create modal
   const [showForm, setShowForm] = useState(false);
@@ -130,6 +133,17 @@ export default function LeavesScreen() {
     }
   };
 
+  const openDetail = async (item: LeaveRequest) => {
+    setSelectedLeave(item);
+    setApprovalChain(null);
+    setChainLoading(true);
+    try {
+      const chain = await getApprovalChain(item.employee);
+      setApprovalChain(chain);
+    } catch { /* ignore */ }
+    finally { setChainLoading(false); }
+  };
+
   const handleCancel = (item: LeaveRequest) => {
     Alert.alert('Annuler la demande', 'Confirmer l\'annulation ?', [
       { text: 'Non', style: 'cancel' },
@@ -169,57 +183,159 @@ export default function LeavesScreen() {
   const getStatusCfg = (status: string) =>
     STATUS_CONFIG[status] ?? { label: status, color: COLORS.textSecondary, icon: 'ellipse' };
 
-  // Validation chain for detail modal
+  // Arborescence de validation complète
   const renderValidationChain = (item: LeaveRequest) => {
-    const steps = [
-      {
+    const isRejected = item.status === 'REJECTED' || item.status === 'rejected';
+    const isRevoked  = item.status === 'REVOKED';
+    const isFinal    = item.status === 'APPROVED' || item.status === 'approved' || isRejected || isRevoked || item.status === 'CANCELLED';
+
+    // Build merged steps: chain steps (approbateurs nommés) + état actuel
+    type Step = {
+      label: string;
+      approverName?: string | null;
+      isOnLeave?: boolean;
+      done: boolean;
+      active: boolean;
+      rejected: boolean;
+      reviewer?: string;
+      reviewDate?: string;
+    };
+
+    const steps: Step[] = [];
+
+    if (approvalChain) {
+      // Étapes issues de la hiérarchie réelle
+      approvalChain.steps.forEach((s) => {
+        const levelLabel = s.level === 'DG'
+          ? 'Directeur Général'
+          : s.level === 'N+1'
+            ? 'Responsable N+1'
+            : s.level === 'N+2'
+              ? 'Responsable N+2'
+              : s.level;
+
+        const isDone  = s.level === 'N+1' ? !!item.reviewed_at
+                      : s.level === 'N+2' ? !!item.second_reviewed_at
+                      : s.level === 'DG'  ? (!!item.reviewed_at && item.status !== 'PENDING')
+                      : false;
+        const isActive = s.level === 'N+1' ? (item.status === 'PENDING' || item.status === 'pending')
+                       : s.level === 'N+2' ? item.status === 'PENDING_SECOND'
+                       : s.level === 'DG'  ? (item.status === 'PENDING' || item.status === 'pending')
+                       : false;
+
+        steps.push({
+          label: levelLabel,
+          approverName: s.approver_name,
+          isOnLeave: s.is_on_leave,
+          done: isDone,
+          active: isActive && !isRejected,
+          rejected: isRejected && isActive,
+          reviewer: s.level === 'N+1' ? item.reviewed_by
+                  : s.level === 'N+2' ? item.second_reviewer
+                  : undefined,
+          reviewDate: s.level === 'N+1' ? item.reviewed_at
+                    : s.level === 'N+2' ? item.second_reviewed_at
+                    : undefined,
+        });
+      });
+    } else {
+      // Fallback sans chaîne chargée
+      steps.push({
         label: 'Responsable N+1',
         done: !!item.reviewed_at,
-        active: item.status === 'PENDING' || item.status === 'pending',
+        active: (item.status === 'PENDING' || item.status === 'pending') && !isRejected,
+        rejected: isRejected && (item.status === 'PENDING' || item.status === 'pending'),
         reviewer: item.reviewed_by,
-        date: item.reviewed_at,
-      },
-      {
-        label: 'Responsable N+2',
-        done: !!item.second_reviewed_at,
-        active: item.status === 'PENDING_SECOND',
-        reviewer: item.second_reviewer,
-        date: item.second_reviewed_at,
-      },
-      {
-        label: 'Validation RH',
-        done: !!item.hr_reviewed_at,
-        active: item.status === 'PENDING_RH',
-        reviewer: item.hr_reviewer,
-        date: item.hr_reviewed_at,
-      },
-    ];
+        reviewDate: item.reviewed_at,
+      });
+      if (item.second_reviewed_at || item.status === 'PENDING_SECOND') {
+        steps.push({
+          label: 'Responsable N+2',
+          done: !!item.second_reviewed_at,
+          active: item.status === 'PENDING_SECOND' && !isRejected,
+          rejected: isRejected && item.status === 'PENDING_SECOND',
+          reviewer: item.second_reviewer,
+          reviewDate: item.second_reviewed_at,
+        });
+      }
+    }
+
+    // Toujours ajouter RH en dernier
+    steps.push({
+      label: 'Validation RH',
+      approverName: undefined,
+      done: !!item.hr_reviewed_at,
+      active: item.status === 'PENDING_RH' && !isRejected,
+      rejected: isRejected && item.status === 'PENDING_RH',
+      reviewer: item.hr_reviewer,
+      reviewDate: item.hr_reviewed_at,
+    });
 
     return (
       <View style={styles.chainContainer}>
-        <Text style={styles.chainTitle}>Processus de validation</Text>
+        <View style={styles.chainTitleRow}>
+          <Ionicons name="git-branch-outline" size={16} color={COLORS.primary} />
+          <Text style={styles.chainTitle}>Arborescence de validation</Text>
+          {chainLoading && <ActivityIndicator size="small" color={COLORS.primary} style={{ marginLeft: 6 }} />}
+        </View>
+
         {steps.map((step, i) => {
           const isLast = i === steps.length - 1;
           let dotColor = COLORS.border;
-          let dotIcon = 'ellipse-outline';
-          if (step.done) { dotColor = COLORS.success; dotIcon = 'checkmark-circle'; }
-          else if (step.active) { dotColor = '#F59E0B'; dotIcon = 'time'; }
-          else if (item.status === 'REJECTED' || item.status === 'rejected') { dotColor = COLORS.danger; dotIcon = 'close-circle'; }
+          let dotIcon: string = 'ellipse-outline';
+          if (step.done)     { dotColor = COLORS.success; dotIcon = 'checkmark-circle'; }
+          else if (step.active)   { dotColor = '#F59E0B';      dotIcon = 'time'; }
+          else if (step.rejected) { dotColor = COLORS.danger;  dotIcon = 'close-circle'; }
+          else if (isFinal && !step.done) { dotColor = COLORS.border; dotIcon = 'remove-circle-outline'; }
 
           return (
             <View key={i} style={styles.chainStep}>
               <View style={styles.chainDotCol}>
                 <Ionicons name={dotIcon as any} size={22} color={dotColor} />
-                {!isLast && <View style={[styles.chainLine, { backgroundColor: step.done ? COLORS.success : COLORS.border }]} />}
+                {!isLast && (
+                  <View style={[styles.chainLine, { backgroundColor: step.done ? COLORS.success : COLORS.border }]} />
+                )}
               </View>
               <View style={styles.chainInfo}>
-                <Text style={[styles.chainLabel, step.active && { color: '#F59E0B', fontWeight: '700' }]}>
-                  {step.label}
-                </Text>
-                {step.done && step.reviewer && (
-                  <Text style={styles.chainReviewer}>{step.reviewer} — {fmtDateTime(step.date)}</Text>
+                <View style={styles.chainLabelRow}>
+                  <Text style={[
+                    styles.chainLabel,
+                    step.active  && { color: '#F59E0B', fontWeight: '700' },
+                    step.done    && { color: COLORS.success },
+                    step.rejected && { color: COLORS.danger },
+                  ]}>
+                    {step.label}
+                  </Text>
+                  {step.isOnLeave && (
+                    <View style={styles.onLeaveBadge}>
+                      <Text style={styles.onLeaveBadgeText}>En congé</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Nom de l'approbateur (arborescence) */}
+                {step.approverName && !step.done && (
+                  <Text style={styles.chainApproverName}>
+                    <Ionicons name="person-outline" size={11} color={COLORS.textSecondary} /> {step.approverName}
+                  </Text>
                 )}
-                {step.active && <Text style={styles.chainWaiting}>En cours de traitement...</Text>}
+
+                {/* Validé par */}
+                {step.done && step.reviewer && (
+                  <Text style={styles.chainReviewer}>
+                    {step.reviewer}{step.reviewDate ? ` — ${fmtDateTime(step.reviewDate)}` : ''}
+                  </Text>
+                )}
+
+                {/* En attente */}
+                {step.active && !step.done && (
+                  <Text style={styles.chainWaiting}>En attente de validation...</Text>
+                )}
+
+                {/* Rejeté */}
+                {step.rejected && (
+                  <Text style={[styles.chainWaiting, { color: COLORS.danger }]}>Demande rejetée</Text>
+                )}
               </View>
             </View>
           );
@@ -231,7 +347,7 @@ export default function LeavesScreen() {
   const renderRequest = ({ item }: { item: LeaveRequest }) => {
     const cfg = getStatusCfg(item.status);
     return (
-      <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={() => setSelectedLeave(item)}>
+      <TouchableOpacity style={styles.card} activeOpacity={0.7} onPress={() => openDetail(item)}>
         <View style={styles.cardHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.cardType}>{item.leave_type_name}</Text>
@@ -710,14 +826,21 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.white, borderRadius: 14, padding: 16, marginBottom: 16,
     shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
   },
-  chainTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 16 },
+  chainTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 16 },
+  chainTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text },
   chainStep: { flexDirection: 'row', minHeight: 52 },
   chainDotCol: { alignItems: 'center', width: 30, marginRight: 12 },
   chainLine: { width: 2, flex: 1, marginVertical: 4 },
   chainInfo: { flex: 1, paddingBottom: 16 },
+  chainLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
   chainLabel: { fontSize: 14, fontWeight: '600', color: COLORS.text },
+  chainApproverName: { fontSize: 12, color: COLORS.textSecondary, marginTop: 3 },
   chainReviewer: { fontSize: 12, color: COLORS.success, marginTop: 2 },
   chainWaiting: { fontSize: 12, color: '#F59E0B', fontStyle: 'italic', marginTop: 2 },
+  onLeaveBadge: {
+    backgroundColor: '#FEF3C7', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+  },
+  onLeaveBadgeText: { fontSize: 10, fontWeight: '600', color: '#92400E' },
 
   // Reject/Revoke blocks
   rejectBlock: {

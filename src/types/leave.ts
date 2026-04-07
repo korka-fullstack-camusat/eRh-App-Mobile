@@ -54,6 +54,20 @@ export interface LeaveRequest {
   justification_validated?: boolean;
 }
 
+export interface ApprovalStep {
+  level: string;          // "N+1", "N+2", "DG", "RH"
+  approver_id?: number | null;
+  approver_name?: string | null;
+  is_on_leave?: boolean;
+}
+
+export interface ApprovalChain {
+  is_department_head: boolean;
+  department?: string | null;
+  approval_flow: 'HIERARCHY' | 'DG_ONLY';
+  steps: ApprovalStep[];
+}
+
 export interface LeaveBalance {
   id: number;
   employee: number;
