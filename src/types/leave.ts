@@ -26,9 +26,15 @@ export interface LeaveType {
   name?: string;
   is_paid?: boolean;
   requires_justification?: boolean;
+  justification_after_leave?: boolean;
+  deducts_from_balance?: boolean;
   max_days_per_request?: number;
+  min_days_per_request?: number;
   max_days_per_year?: number;
   monthly_accrual?: number;
+  notice_days_required?: number;
+  is_fixed_duration?: boolean;
+  fixed_duration_days?: number;
   color?: string;
 }
 
@@ -106,4 +112,31 @@ export interface LeaveBalance {
   total_days: number;
   used_days: number;
   remaining_days: number;
+}
+
+export type ExitAuthorizationStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+
+export interface ExitAuthorization {
+  id: number;
+  employee_id: number;
+  employee_name?: string;
+  employee_matricule?: string;
+  employee_service?: string;
+  datetime_exit: string;
+  datetime_return: string;
+  motif: string;
+  status: ExitAuthorizationStatus;
+  reviewed_by_name?: string;
+  reviewed_by_id?: number;
+  reviewed_at?: string;
+  reject_reason?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExitAuthorizationCreate {
+  employee_id: number;
+  datetime_exit: string;
+  datetime_return: string;
+  motif: string;
 }

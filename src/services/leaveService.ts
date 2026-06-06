@@ -1,5 +1,5 @@
 import api from '@/api/axios';
-import type { LeaveRequest, LeaveBalance, LeaveType, ApprovalChain } from '@/types/leave';
+import type { LeaveRequest, LeaveBalance, LeaveType, ApprovalChain, ExitAuthorization, ExitAuthorizationCreate } from '@/types/leave';
 
 export async function getMyLeaveRequests(employeeId: number): Promise<LeaveRequest[]> {
   const { data } = await api.get(`/api/leaves/requests/employee/${employeeId}/`);
@@ -21,21 +21,36 @@ export async function getApprovalChain(employeeId: number): Promise<ApprovalChai
   return data;
 }
 
+export async function checkHolidayDays(
+  start_date: string,
+  end_date: string,
+  leave_type_id?: number,
+): Promise<{ effective_days: number; holidays: { name: string; date: string }[] }> {
+  const { data } = await api.post('/api/holidays/check-days/', { start_date, end_date, leave_type_id });
+  return data;
+}
+
 export async function createLeaveRequest(payload: {
-  employee: number;
-  leave_type: number;
+  employee_id: number;
+  leave_type_id: number;
   start_date: string;
   end_date: string;
-  reason?: string;
+  days: number;
+  motif?: string;
+  half_day_start?: boolean;
+  half_day_end?: boolean;
   justification?: { uri: string; name: string; mimeType?: string };
 }): Promise<LeaveRequest> {
   if (payload.justification) {
     const form = new FormData();
-    form.append('employee', String(payload.employee));
-    form.append('leave_type', String(payload.leave_type));
+    form.append('employee_id', String(payload.employee_id));
+    form.append('leave_type_id', String(payload.leave_type_id));
     form.append('start_date', payload.start_date);
     form.append('end_date', payload.end_date);
-    if (payload.reason) form.append('reason', payload.reason);
+    form.append('days', String(payload.days));
+    if (payload.motif) form.append('motif', payload.motif);
+    if (payload.half_day_start) form.append('half_day_start', 'true');
+    if (payload.half_day_end) form.append('half_day_end', 'true');
     form.append('justification_document', {
       uri: payload.justification.uri,
       name: payload.justification.name,
@@ -47,11 +62,14 @@ export async function createLeaveRequest(payload: {
     return data;
   }
   const { data } = await api.post<LeaveRequest>('/api/leaves/requests/', {
-    employee: payload.employee,
-    leave_type: payload.leave_type,
+    employee_id: payload.employee_id,
+    leave_type_id: payload.leave_type_id,
     start_date: payload.start_date,
     end_date: payload.end_date,
-    reason: payload.reason,
+    days: payload.days,
+    motif: payload.motif ?? '',
+    half_day_start: payload.half_day_start ?? false,
+    half_day_end: payload.half_day_end ?? false,
   });
   return data;
 }
@@ -121,4 +139,21 @@ export async function hrRejectLeaveRequest(
 // Kept for backward compat
 export async function getManagerPendingLeaves(managerEmployeeId: number): Promise<LeaveRequest[]> {
   return getManagerLeaves(managerEmployeeId, ['PENDING', 'PENDING_SECOND']);
+}
+
+// ── Demandes de sortie ────────────────────────────────────────────────────────
+
+export async function getMyExitAuthorizations(employeeId: number): Promise<ExitAuthorization[]> {
+  const { data } = await api.get(`/api/leaves/exit-authorizations/employee/${employeeId}/`);
+  return Array.isArray(data) ? data : data?.results ?? [];
+}
+
+export async function createExitAuthorization(payload: ExitAuthorizationCreate): Promise<ExitAuthorization> {
+  const { data } = await api.post<ExitAuthorization>('/api/leaves/exit-authorizations/', payload);
+  return data;
+}
+
+export async function cancelExitAuthorization(id: number): Promise<ExitAuthorization> {
+  const { data } = await api.post<ExitAuthorization>(`/api/leaves/exit-authorizations/${id}/cancel/`);
+  return data;
 }

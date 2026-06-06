@@ -9,37 +9,31 @@ interface Props {
 }
 
 export default function CamusatLogo({ size = 48, showText = true, textColor = '#003c71' }: Props) {
-  const r = size / 2;
   return (
     <View style={styles.container}>
       <Svg width={size} height={size} viewBox="0 0 100 100">
         <Defs>
-          <RadialGradient id="grad" cx="40%" cy="35%" r="60%">
-            <Stop offset="0%" stopColor="#EF4444" />
-            <Stop offset="100%" stopColor="#B91C1C" />
+          <RadialGradient id="grad" cx="38%" cy="32%" r="65%">
+            <Stop offset="0%" stopColor="#E53535" />
+            <Stop offset="100%" stopColor="#B71C1C" />
           </RadialGradient>
         </Defs>
-        {/* Fond rouge */}
+        {/* Cercle rouge */}
         <Circle cx="50" cy="50" r="49" fill="url(#grad)" />
-        {/* Forme blanche – swoosh Camusat */}
+        {/* V / crochet blanc */}
         <Path
-          d="M 68 18
-             C 78 28, 80 44, 72 58
-             C 64 72, 50 80, 36 78
-             L 28 70
-             C 36 72, 48 66, 56 52
-             C 48 54, 38 50, 30 40
-             L 38 32
-             C 46 44, 56 46, 64 40
-             C 68 34, 66 24, 62 20
+          d="M 17 40
+             C 12 54, 18 70, 43 79
+             C 46 80, 48 81, 50 81
+             C 52 80, 56 77, 64 66
+             C 72 55, 79 38, 83 16
+             L 76 12
+             C 73 30, 66 48, 57 60
+             C 53 65, 51 68, 50 71
+             L 44 71
+             C 35 64, 23 51, 22 40
              Z"
           fill="white"
-          opacity="0.95"
-        />
-        <Path
-          d="M 38 72 L 28 84 L 22 76 L 34 64 Z"
-          fill="white"
-          opacity="0.95"
         />
       </Svg>
       {showText && (

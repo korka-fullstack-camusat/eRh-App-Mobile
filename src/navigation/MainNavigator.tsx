@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/theme';
 import CamusatLogo from '@/components/CamusatLogo';
 import { useAuth } from '@/contexts/AuthContext';
+import { useEmployee } from '@/contexts/EmployeeContext';
 
 import DashboardScreen from '@/screens/DashboardScreen';
 import LeavesScreen from '@/screens/leaves/LeavesScreen';
@@ -93,6 +94,7 @@ function isManager(roles?: string[]): boolean {
 export default function MainNavigator() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { bulletinsCount } = useEmployee();
   const bottomInset = Platform.OS === 'android' ? insets.bottom : 0;
   const tabBarHeight = 58 + bottomInset;
   const managerAccess = isManager(user?.roles);
@@ -130,7 +132,12 @@ export default function MainNavigator() {
           options={{ title: 'Approbation', header: () => <CustomHeader title="Approbation congés" /> }} />
       )}
       <Tab.Screen name="PayslipsTab" component={PayslipsScreen}
-        options={{ title: 'Bulletins', header: () => <CustomHeader title="Mes bulletins" /> }} />
+        options={{
+          title: 'Bulletins',
+          header: () => <CustomHeader title="Mes bulletins" />,
+          tabBarBadge: bulletinsCount > 0 ? bulletinsCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: COLORS.danger, fontSize: 10 },
+        }} />
       <Tab.Screen name="ProfileTab" component={ProfileStackNavigator}
         options={{ title: 'Profil', headerShown: false }} />
     </Tab.Navigator>
