@@ -22,8 +22,29 @@ export async function getProfile(): Promise<UserProfile> {
 export async function changePassword(payload: {
   old_password: string;
   new_password: string;
+  confirm_password: string;
 }): Promise<void> {
   await api.post('/api/auth/change-password/', payload);
+}
+
+export async function forgotPasswordSms(phone: string): Promise<{ detail: string }> {
+  const { data } = await api.post('/api/auth/forgot-password-sms/', { phone });
+  return data;
+}
+
+export async function verifyOtpSms(phone: string, code: string): Promise<{ detail: string }> {
+  const { data } = await api.post('/api/auth/verify-otp-sms/', { phone, code });
+  return data;
+}
+
+export async function resetPasswordSms(payload: {
+  phone: string;
+  code: string;
+  new_password: string;
+  confirm_password: string;
+}): Promise<{ detail: string }> {
+  const { data } = await api.post('/api/auth/reset-password-sms/', payload);
+  return data;
 }
 
 export async function getStoredTokens(): Promise<{ access: string | null; refresh: string | null }> {
