@@ -191,14 +191,13 @@ export default function LoginScreen() {
           <>
             <Text style={fp.stepTitle}>Numéro de téléphone</Text>
             <Text style={fp.stepDesc}>Saisissez le numéro enregistré dans votre dossier RH. Un code sera envoyé par SMS.</Text>
-            <Text style={fp.label}>Numéro de téléphone</Text>
             <View style={fp.inputWrap}>
               <Ionicons name="call-outline" size={18} color={COLORS.textSecondary} style={{ marginLeft: 12 }} />
               <TextInput
                 style={fp.input}
                 value={fpPhone}
                 onChangeText={t => { setFpPhone(t); setFpError(''); }}
-                placeholder="Ex: 77 123 45 67"
+                placeholder="Entrez votre numéro"
                 placeholderTextColor={COLORS.textSecondary}
                 keyboardType="phone-pad"
                 autoFocus
@@ -315,8 +314,8 @@ export default function LoginScreen() {
           {/* Header */}
           <View style={styles.header}>
             <CamusatLogo size={64} showText={false} />
-            <Text style={styles.appName}>eRH Mobile</Text>
-            <Text style={styles.subtitle}>Espace Employé</Text>
+            <Text style={styles.appName}>eRH · Camusat</Text>
+            <Text style={styles.subtitle}>Gérez vos congés, bulletins et pointages</Text>
           </View>
 
           {/* Formulaire */}
@@ -331,7 +330,7 @@ export default function LoginScreen() {
                   style={styles.input}
                   value={username}
                   onChangeText={setUsername}
-                  placeholder="Matricule ou email"
+                  placeholder="Entrez votre identifiant"
                   placeholderTextColor={COLORS.textSecondary}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -348,7 +347,7 @@ export default function LoginScreen() {
                   style={styles.input}
                   value={password}
                   onChangeText={setPassword}
-                  placeholder="Votre mot de passe"
+                  placeholder="Entrez votre mot de passe"
                   placeholderTextColor={COLORS.textSecondary}
                   secureTextEntry={!showPassword}
                   returnKeyType="done"
