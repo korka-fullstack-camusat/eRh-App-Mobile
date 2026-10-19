@@ -11,10 +11,12 @@
       "bundleIdentifier": "com.camusat.erh.mobile"
     },
     "android": {
-      "package": "com.camusat.erh.mobile"
+      "package": "com.camusat.erh.mobile",
+      "versionCode": 1
     },
     "plugins": [
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-font"
     ]
   }
 }
