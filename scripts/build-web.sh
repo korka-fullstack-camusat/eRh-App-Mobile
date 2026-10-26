@@ -15,6 +15,16 @@ if [ -d "$OUT/assets/node_modules" ]; then
   grep -rl "assets/node_modules" "$OUT" --include="*.js" --include="*.html" --include="*.json" \
     | xargs -r sed -i 's#assets/node_modules#assets/vendor#g'
 fi
+# Le nom du fichier JS (hash) est calculé par Expo AVANT ces remplacements : on le recalcule, sinon les navigateurs et Cloudflare
+# gardent l'ancien fichier (cache d'un an, « immutable ») sous le même nom et n'affichent jamais la correction.
+for f in "$OUT"/_expo/static/js/web/AppEntry-*.js; do
+  old="$(basename "$f")"
+  new="AppEntry-$(sha256sum "$f" | cut -c1-32).js"
+  if [ "$old" != "$new" ]; then
+    mv "$f" "$OUT/_expo/static/js/web/$new"
+    sed -i "s#$old#$new#g" "$OUT/index.html"
+  fi
+done
 if grep -rq "node_modules" "$OUT"; then echo "ERREUR : une référence à node_modules reste dans $OUT" >&2; exit 1; fi
 
 cp assets/web/*.png "$OUT/"
