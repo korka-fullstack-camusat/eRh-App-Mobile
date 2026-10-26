@@ -59,3 +59,33 @@ src/
 ├── types/        # Types TypeScript (employee, attendance, leave, auth)
 └── theme.ts      # Couleurs et thème de l'app
 ```
+
+## Version iOS (iPhone)
+
+Le code est le même pour Android et iOS. Le bundle iOS compile (`npx expo export --platform ios`).
+Une version installable sur iPhone demande un **compte Apple Developer** (99 $/an) : c'est une règle d'Apple.
+
+### 1. TestFlight (recommandé : un lien à envoyer aux testeurs)
+```bash
+npm install
+npx eas-cli login
+npx eas-cli build --platform ios --profile production     # Apple demande le compte Developer, EAS gère les certificats
+npx eas-cli submit --platform ios --latest                # envoie le build dans App Store Connect › TestFlight
+```
+Dans App Store Connect › TestFlight : ajoutez les testeurs (internes ou par lien public). Ils installent l'app **TestFlight**
+depuis l'App Store, ouvrent le lien d'invitation, puis appuient sur **Installer**.
+
+### 2. Installation directe sur des iPhone enregistrés (sans TestFlight)
+```bash
+npx eas-cli device:create                                  # envoie le lien d'enregistrement aux iPhone (UDID)
+npx eas-cli build --platform ios --profile ios-internal
+```
+EAS fournit un lien d'installation, valable pour les iPhone enregistrés seulement.
+
+### 3. Simulateur iOS (Mac avec Xcode, sans compte Apple)
+```bash
+npx eas-cli build --platform ios --profile ios-simulator
+```
+
+Identifiant de l'app : `com.camusat.erh.mobile` — à créer dans App Store Connect avec le même identifiant.
+Le numéro de build iOS s'incrémente automatiquement à chaque build `production`.

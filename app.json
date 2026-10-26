@@ -8,7 +8,11 @@
     "sdkVersion": "54.0.0",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.camusat.erh.mobile"
+      "bundleIdentifier": "com.camusat.erh.mobile",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.camusat.erh.mobile",
