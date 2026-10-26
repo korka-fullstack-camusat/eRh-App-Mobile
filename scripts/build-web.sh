@@ -8,6 +8,15 @@ OUT="${1:-dist-web}"
 rm -rf "$OUT"
 CI=1 npx expo export --platform web --output-dir "$OUT"
 
+# Expo place les polices d'icônes et les images des bibliothèques dans assets/node_modules : Git et Docker ignorent
+# tout dossier nommé node_modules, ce qui supprimait les icônes (petits carrés). On le renomme en « vendor ».
+if [ -d "$OUT/assets/node_modules" ]; then
+  mv "$OUT/assets/node_modules" "$OUT/assets/vendor"
+  grep -rl "assets/node_modules" "$OUT" --include="*.js" --include="*.html" --include="*.json" \
+    | xargs -r sed -i 's#assets/node_modules#assets/vendor#g'
+fi
+if grep -rq "node_modules" "$OUT"; then echo "ERREUR : une référence à node_modules reste dans $OUT" >&2; exit 1; fi
+
 cp assets/web/*.png "$OUT/"
 cat > "$OUT/manifest.webmanifest" <<'JSON'
 {
