@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { storage } from '@/platform/storage';
 import { login as apiLogin, logout as apiLogout, getProfile } from '@/services/authService';
 import type { UserProfile, LoginCredentials } from '@/types/auth';
 
@@ -22,14 +22,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = await SecureStore.getItemAsync('access_token');
+        const token = await storage.getItem('access_token');
         if (token) {
           const profile = await getProfile();
           setUser(profile);
         }
       } catch {
-        await SecureStore.deleteItemAsync('access_token');
-        await SecureStore.deleteItemAsync('refresh_token');
+        await storage.removeItem('access_token');
+        await storage.removeItem('refresh_token');
       } finally {
         setIsLoading(false);
       }

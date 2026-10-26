@@ -37,7 +37,16 @@
     ],
     "icon": "./assets/icon.png",
     "web": {
-      "favicon": "./assets/favicon.png"
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "eRH Camusat",
+      "shortName": "eRH-Camusat",
+      "themeColor": "#003c71",
+      "backgroundColor": "#ffffff"
+    },
+    "experiments": {
+      "baseUrl": "/m"
     }
   }
 }

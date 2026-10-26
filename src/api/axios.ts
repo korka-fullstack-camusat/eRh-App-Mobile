@@ -1,7 +1,11 @@
 import axios from 'axios';
-import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+import { storage } from '@/platform/storage';
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://apierh.camusatsn.com';
+// Version web : même adresse que le site (le serveur web relaie /api vers le backend du pays : Sénégal ou Burkina).
+const BASE_URL = Platform.OS === 'web'
+  ? window.location.origin
+  : process.env.EXPO_PUBLIC_API_URL || 'https://apierh.camusatsn.com';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -14,7 +18,7 @@ const api = axios.create({
 // Inject access token on every request
 api.interceptors.request.use(
   async (config) => {
-    const token = await SecureStore.getItemAsync('access_token');
+    const token = await storage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -45,7 +49,7 @@ api.interceptors.response.use(
       error.response?.status === 401 &&
       !originalRequest._retry
     ) {
-      const refreshToken = await SecureStore.getItemAsync('refresh_token');
+      const refreshToken = await storage.getItem('refresh_token');
       if (!refreshToken) return Promise.reject(error);
 
       if (isRefreshing) {
@@ -65,13 +69,13 @@ api.interceptors.response.use(
           refresh: refreshToken,
         });
         const newToken = res.data.access;
-        await SecureStore.setItemAsync('access_token', newToken);
+        await storage.setItem('access_token', newToken);
         api.defaults.headers.Authorization = `Bearer ${newToken}`;
         onRefreshed(newToken);
         return api(originalRequest);
       } catch {
-        await SecureStore.deleteItemAsync('access_token');
-        await SecureStore.deleteItemAsync('refresh_token');
+        await storage.removeItem('access_token');
+        await storage.removeItem('refresh_token');
         return Promise.reject(error);
       } finally {
         isRefreshing = false;
