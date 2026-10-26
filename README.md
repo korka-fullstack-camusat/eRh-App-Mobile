@@ -65,6 +65,17 @@ src/
 Le code est le même pour Android et iOS. Le bundle iOS compile (`npx expo export --platform ios`).
 Une version installable sur iPhone demande un **compte Apple Developer** (99 $/an) : c'est une règle d'Apple.
 
+### Quelle méthode choisir ? (l'utilisateur n'installe jamais de .ipa à la main : Apple l'interdit)
+
+| Besoin | Méthode | Ce que fait l'utilisateur |
+|---|---|---|
+| Tous les employés, installation la plus simple | **App Store « non répertoriée »** (Unlisted) | Scanne le QR → page App Store → **Obtenir**. Pas de TestFlight, pas de limite d'appareils |
+| Moins de 100 iPhone connus | **Ad Hoc** (profil `ios-internal`) | Scanne le QR → **Installer**. Pas de TestFlight, mais chaque iPhone est enregistré à l'avance (UDID) |
+| Toute l'entreprise, sans App Store | **Apple Developer Enterprise** (299 $/an, accord d'Apple difficile) | Scanne le QR → **Installer** → fait confiance au profil dans Réglages |
+| Phase de test | **TestFlight** | Installe d'abord TestFlight |
+
+Dans tous les cas, le lien est placé dans `downloads/ios-link.txt` côté serveur web : la page `/telecharger/` l'affiche aux iPhone.
+
 ### 1. TestFlight (recommandé : un lien à envoyer aux testeurs)
 ```bash
 npm install
