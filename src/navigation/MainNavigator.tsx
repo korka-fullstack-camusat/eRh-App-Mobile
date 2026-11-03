@@ -11,7 +11,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useEmployee } from '@/contexts/EmployeeContext';
 
 import DashboardScreen from '@/screens/DashboardScreen';
-import LeavesScreen from '@/screens/leaves/LeavesScreen';
+import RequestsScreen from '@/screens/leaves/RequestsScreen';
+import AttendanceScreen from '@/screens/attendance/AttendanceScreen';
 import LeaveApprobationScreen from '@/screens/leaves/LeaveApprobationScreen';
 import PayslipsScreen from '@/screens/payslips/PayslipsScreen';
 import DossierScreen from '@/screens/dossier/DossierScreen';
@@ -34,6 +35,7 @@ export type RootTabParamList = {
   LeavesTab: undefined;
   ApprobationTab: undefined;
   PayslipsTab: undefined;
+  AttendanceTab: undefined;
   ProfileTab: undefined;
 };
 
@@ -76,11 +78,15 @@ function isManager(roles?: string[]): boolean {
 export default function MainNavigator() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { employee, bulletinsCount } = useEmployee();
+  const { employee, bulletinsCount, isLoading: employeeLoading } = useEmployee();
   const bottomInset = Platform.OS === 'android' ? insets.bottom : 0;
   const tabBarHeight = 58 + bottomInset;
   const managerAccess = isManager(user?.roles);
   const isTechnicien = (employee?.fonction || '').toUpperCase() === 'TECHNICIEN';
+  // Bulletins : seulement pour ceux qui en ont ; les autres (hors techniciens) voient « Pointage » à la place.
+  const hasBulletins = bulletinsCount > 0;
+  const showPayslips = !employeeLoading && !isTechnicien && hasBulletins;
+  const showAttendance = !employeeLoading && !isTechnicien && !hasBulletins;
 
   return (
     <Tab.Navigator
@@ -98,9 +104,10 @@ export default function MainNavigator() {
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
           if (route.name === 'DashboardTab')      iconName = focused ? 'home'             : 'home-outline';
-          else if (route.name === 'LeavesTab')    iconName = focused ? 'calendar'         : 'calendar-outline';
+          else if (route.name === 'LeavesTab')    iconName = focused ? 'clipboard'        : 'clipboard-outline';
           else if (route.name === 'ApprobationTab') iconName = focused ? 'checkmark-done' : 'checkmark-done-outline';
           else if (route.name === 'PayslipsTab')  iconName = focused ? 'document-text'   : 'document-text-outline';
+          else if (route.name === 'AttendanceTab') iconName = focused ? 'time'             : 'time-outline';
           else if (route.name === 'ProfileTab')   iconName = focused ? 'person'           : 'person-outline';
           return <Ionicons name={iconName} size={size} color={color} />;
         },
@@ -108,13 +115,13 @@ export default function MainNavigator() {
     >
       <Tab.Screen name="DashboardTab" component={DashboardScreen}
         options={{ title: 'Accueil', headerShown: false }} />
-      <Tab.Screen name="LeavesTab" component={LeavesScreen}
+      <Tab.Screen name="LeavesTab" component={RequestsScreen}
         options={{ title: 'Demandes', header: () => <CustomHeader title="Mes demandes" /> }} />
       {managerAccess && (
         <Tab.Screen name="ApprobationTab" component={LeaveApprobationScreen}
           options={{ title: 'Approbation', header: () => <CustomHeader title="Approbations" /> }} />
       )}
-      {!isTechnicien && (
+      {showPayslips && (
         <Tab.Screen name="PayslipsTab" component={PayslipsScreen}
           options={{
             title: 'Bulletins',
@@ -122,6 +129,10 @@ export default function MainNavigator() {
             tabBarBadge: bulletinsCount > 0 ? bulletinsCount : undefined,
             tabBarBadgeStyle: { backgroundColor: COLORS.danger, fontSize: 10 },
           }} />
+      )}
+      {showAttendance && (
+        <Tab.Screen name="AttendanceTab" component={AttendanceScreen}
+          options={{ title: 'Pointage', header: () => <CustomHeader title="Mon pointage" /> }} />
       )}
       <Tab.Screen name="ProfileTab" component={ProfileStackNavigator}
         options={{ title: 'Profil', headerShown: false }} />
