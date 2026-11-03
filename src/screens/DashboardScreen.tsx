@@ -9,7 +9,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployee } from '@/contexts/EmployeeContext';
-import { getMyLeaveBalances } from '@/services/leaveService';
+import { getMyLeaveBalances, getManagerLeaves, getManagerExitAuthorizations } from '@/services/leaveService';
+import type { LeaveRequest, ExitAuthorization } from '@/types/leave';
 import { getMyAttendance } from '@/services/attendanceService';
 import { getAvailableBulletins, requestPayslipAccess } from '@/services/employeeService';
 import type { LeaveBalance } from '@/types/leave';
@@ -82,6 +83,8 @@ export default function DashboardScreen() {
   const [allDays,        setAllDays]       = useState<EmployeePeriodDetailDay[]>([]);
   const [refreshing,     setRefreshing]    = useState(false);
   const [bulletinsCount, setBulletinsCount] = useState(0);
+  const [pendingLeaves, setPendingLeaves] = useState<LeaveRequest[]>([]);
+  const [pendingExits,  setPendingExits]  = useState<ExitAuthorization[]>([]);
 
   // Modal demande bulletins antérieurs
   const [requestModal,   setRequestModal]   = useState(false);
@@ -132,13 +135,24 @@ export default function DashboardScreen() {
     if (!isTech && employee.matricule) {
       promises.push(getAvailableBulletins(employee.matricule));
     }
+    const managerId = user?.employee_id ?? null;
+    const isMgr = !!managerId && !!user?.roles && (user.roles.includes('manager1') || user.roles.includes('manager2') || user.roles.includes('rh'));
+    if (isMgr && managerId) {
+      Promise.allSettled([
+        getManagerLeaves(managerId, ['PENDING', 'PENDING_SECOND', 'PENDING_RH']),
+        getManagerExitAuthorizations(managerId, ['PENDING']),
+      ]).then(([l, e]) => {
+        setPendingLeaves(l.status === 'fulfilled' ? l.value : []);
+        setPendingExits(e.status === 'fulfilled' ? e.value : []);
+      });
+    }
     const [bal, att, bul] = await Promise.allSettled(promises);
     if (bal.status === 'fulfilled') setBalances(bal.value);
     if (att.status === 'fulfilled') setAllDays(att.value.days ?? []);
     if (bul && bul.status === 'fulfilled') {
       setBulletinsCount(Array.isArray(bul.value) ? bul.value.length : 0);
     }
-  }, [employee]);
+  }, [employee, user]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -252,12 +266,24 @@ export default function DashboardScreen() {
     setReqSent(false);
   };
 
-  // ── Raccourcis (même principe que l'accueil Inventory) ──
-  type Tile = { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; badge?: number; go: () => void };
-  const tiles: Tile[] = [
-    { key: 'leave', label: 'Demande de congé', icon: 'calendar-outline', go: () => navigation.navigate('LeavesTab', { mode: 'leave', ts: Date.now() }) },
-    { key: 'exit', label: 'Demande de sortie', icon: 'log-out-outline', go: () => navigation.navigate('LeavesTab', { mode: 'exit', ts: Date.now() }) },
-  ];
+  // ── Notifications : demandes reçues par un manager ──
+  const isManagerUser = !!user?.roles && (user.roles.includes('manager1') || user.roles.includes('manager2') || user.roles.includes('rh'));
+  type Notif = { key: string; kind: 'leave' | 'exit'; title: string; sub: string; at: number };
+  const dFr = (iso: string) => { try { return format(new Date(iso), 'd MMM yyyy', { locale: fr }); } catch { return iso; } };
+  const notifs: Notif[] = [
+    ...pendingLeaves.map(l => ({
+      key: `l${l.id}`, kind: 'leave' as const,
+      title: `Congé · ${l.employee?.full_name || l.employee_name || 'Employé'}`,
+      sub: `${l.leave_type_name ? `${l.leave_type_name} · ` : ''}du ${dFr(l.start_date)} au ${dFr(l.end_date)}`,
+      at: new Date(l.created_at).getTime() || 0,
+    })),
+    ...pendingExits.map(x => ({
+      key: `e${x.id}`, kind: 'exit' as const,
+      title: `Sortie · ${x.employee_name || 'Employé'}`,
+      sub: `${x.motif} · ${dFr(x.datetime_exit)}`,
+      at: new Date(x.created_at).getTime() || 0,
+    })),
+  ].sort((a, b) => b.at - a.at);
 
   if (empLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
@@ -346,32 +372,48 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* ════════════ RACCOURCIS ════════════ */}
-        <View style={styles.secHead}>
-          <Ionicons name="flash-outline" size={18} color={COLORS.primary} />
-          <Text style={styles.secTitle}>Accès rapide</Text>
-        </View>
-        <View style={styles.grid}>
-          {tiles.map(t => (
-            <TouchableOpacity
-              key={t.key}
-              style={styles.tile}
-              onPress={t.go}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel={t.badge ? `${t.label}, ${t.badge} en attente` : t.label}
-            >
-              <View style={styles.tileIcon}>
-                <Ionicons name={t.icon} size={34} color={COLORS.primary} />
-                {!!t.badge && (
-                  <View style={styles.tileBadge}><Text style={styles.tileBadgeText}>{t.badge}</Text></View>
-                )}
+        {/* ════════════ NOTIFICATIONS (managers) ════════════ */}
+        {isManagerUser && (
+          <>
+            <View style={styles.secHead}>
+              <Ionicons name="notifications-outline" size={18} color={COLORS.primary} />
+              <Text style={styles.secTitle}>Notifications</Text>
+              {notifs.length > 0 && (
+                <View style={styles.countBadge}><Text style={styles.countBadgeText}>{notifs.length}</Text></View>
+              )}
+            </View>
+            {notifs.length === 0 ? (
+              <View style={styles.row}>
+                <View style={[styles.rowIcon, { backgroundColor: COLORS.green100 }]}>
+                  <Ionicons name="checkmark-circle-outline" size={22} color={COLORS.success} />
+                </View>
+                <Text style={[styles.rowSub, { flex: 1, marginTop: 0 }]}>Aucune demande en attente de validation.</Text>
               </View>
-              <Text style={styles.tileLabel} numberOfLines={2}>{t.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
+            ) : (
+              <>
+                {notifs.slice(0, 5).map(n => (
+                  <TouchableOpacity key={n.key} style={styles.row} activeOpacity={0.85} accessibilityRole="button"
+                    accessibilityLabel={`${n.title}. ${n.sub}`}
+                    onPress={() => navigation.navigate('ApprobationTab', { mode: n.kind, ts: Date.now() })}>
+                    <View style={[styles.rowIcon, { backgroundColor: n.kind === 'leave' ? COLORS.blue100 : '#FEF3C7' }]}>
+                      <Ionicons name={n.kind === 'leave' ? 'calendar-outline' : 'log-out-outline'} size={20} color={n.kind === 'leave' ? COLORS.primary : '#B45309'} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rowTitle} numberOfLines={1}>{n.title}</Text>
+                      <Text style={styles.rowSub} numberOfLines={2}>{n.sub}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
+                ))}
+                {notifs.length > 5 && (
+                  <TouchableOpacity onPress={() => navigation.navigate('ApprobationTab')} style={styles.moreBtn} accessibilityRole="button">
+                    <Text style={styles.moreText}>Voir les {notifs.length} demandes</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
+          </>
+        )}
       </ScrollView>
 
       {/* ══ MODAL VUE HEBDOMADAIRE ══ */}
@@ -520,6 +562,10 @@ export default function DashboardScreen() {
 // ─── Styles (responsive — base 750 dp height / 390 dp width) ─────────────────
 
 const styles = StyleSheet.create({
+  countBadge: { minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center' },
+  countBadgeText: { color: '#fff', fontWeight: '900', fontSize: 12 },
+  moreBtn: { alignSelf: 'center', marginTop: 10, paddingVertical: 8, paddingHorizontal: 14 },
+  moreText: { color: COLORS.primary, fontWeight: '800', fontSize: 14 },
   soldeCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginHorizontal: 16, marginTop: 14,
     borderWidth: 2, borderColor: COLORS.primary, borderRadius: 18, backgroundColor: COLORS.white,

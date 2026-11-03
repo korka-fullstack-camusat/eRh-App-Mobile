@@ -15,6 +15,7 @@ import {
   hrRejectLeaveRequest,
 } from '@/services/leaveService';
 import type { LeaveRequest, LeaveStatus } from '@/types/leave';
+import { useRoute } from '@react-navigation/native';
 import { COLORS } from '@/theme';
 import ExitApprovalsSection from './ExitApprovalsSection';
 import { format } from 'date-fns';
@@ -669,7 +670,11 @@ const styles = StyleSheet.create({
 export default function LeaveApprobationScreen() {
   const { user } = useAuth();
   const managerEmployeeId = user?.employee_id ?? null;
+  const route = useRoute<any>();
   const [mode, setMode] = useState<'leave' | 'exit'>('leave');
+  const routeMode = route.params?.mode as 'leave' | 'exit' | undefined;
+  const routeTs = route.params?.ts;
+  useEffect(() => { if (routeMode) setMode(routeMode); }, [routeMode, routeTs]);
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={['bottom']}>
       {!!managerEmployeeId && (
