@@ -5,7 +5,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '@/theme';
-import CamusatLogo from '@/components/CamusatLogo';
+import { useNavigation } from '@react-navigation/native';
+import AppHeader from '@/components/AppHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployee } from '@/contexts/EmployeeContext';
 
@@ -17,33 +18,14 @@ import DossierScreen from '@/screens/dossier/DossierScreen';
 import ChangePasswordScreen from '@/screens/auth/ChangePasswordScreen';
 
 function CustomHeader({ title, onBack }: { title: string; onBack?: () => void }) {
-  const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
   return (
-    <View style={{
-      backgroundColor: COLORS.primary,
-      paddingHorizontal: 16,
-      paddingBottom: 14,
-      paddingTop: insets.top + 10,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    }}>
-      {/* Gauche : back (si dispo) + logo */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        {onBack && (
-          <TouchableOpacity onPress={onBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name="chevron-back" size={24} color={COLORS.white} />
-          </TouchableOpacity>
-        )}
-        <CamusatLogo size={28} showText={false} />
-        <View>
-          <Text style={{ fontSize: 12, fontWeight: '700', color: COLORS.white, letterSpacing: -0.3 }}>camusat</Text>
-          <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.75)', letterSpacing: 1.2, textTransform: 'uppercase' }}>ERH</Text>
-        </View>
-      </View>
-      {/* Droite : titre de la page */}
-      <Text style={{ fontSize: 17, fontWeight: 'bold', color: COLORS.white }}>{title}</Text>
-    </View>
+    <AppHeader
+      title={title}
+      onBack={onBack}
+      onProfile={() => navigation.navigate('ProfileTab', { screen: 'ProfileMain' })}
+      onChangePassword={() => navigation.navigate('ProfileTab', { screen: 'ChangePassword' })}
+    />
   );
 }
 
@@ -103,16 +85,16 @@ export default function MainNavigator() {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.textSecondary,
+        tabBarActiveTintColor: '#ffffff',
+        tabBarInactiveTintColor: 'rgba(255,255,255,0.6)',
         tabBarStyle: {
-          backgroundColor: COLORS.white,
-          borderTopColor: COLORS.border,
+          backgroundColor: COLORS.primary,
+          borderTopWidth: 0,
           paddingTop: 6,
           paddingBottom: Platform.OS === 'android' ? bottomInset + 6 : 6,
           height: tabBarHeight,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '800' },
         tabBarIcon: ({ focused, color, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = 'home';
           if (route.name === 'DashboardTab')      iconName = focused ? 'home'             : 'home-outline';

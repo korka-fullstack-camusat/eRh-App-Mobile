@@ -94,13 +94,13 @@ export default function UpdatePrompt() {
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000, paddingHorizontal: 12 },
   card: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.primary, borderRadius: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.primary, borderRadius: 14,
     paddingVertical: 12, paddingHorizontal: 14, elevation: 8,
     shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8, shadowOffset: { width: 0, height: 3 },
   },
   texts: { flex: 1 },
-  title: { color: COLORS.white, fontWeight: '700', fontSize: 15 },
-  sub: { color: 'rgba(255,255,255,0.85)', fontSize: 12.5, marginTop: 2 },
-  btn: { backgroundColor: COLORS.white, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, minWidth: 118, alignItems: 'center' },
-  btnText: { color: COLORS.primary, fontWeight: '700', fontSize: 14 },
+  title: { color: COLORS.primary, fontWeight: '900', fontSize: 14 },
+  sub: { color: COLORS.textSecondary, fontSize: 12, marginTop: 2 },
+  btn: { backgroundColor: COLORS.primary, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, minWidth: 118, alignItems: 'center' },
+  btnText: { color: COLORS.white, fontWeight: '900', fontSize: 14 },
 });

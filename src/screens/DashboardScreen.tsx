@@ -15,7 +15,7 @@ import { getAvailableBulletins, requestPayslipAccess } from '@/services/employee
 import type { LeaveBalance } from '@/types/leave';
 import type { EmployeePeriodDetailDay } from '@/types/attendance';
 import { COLORS } from '@/theme';
-import CamusatLogo from '@/components/CamusatLogo';
+import AppHeader from '@/components/AppHeader';
 import {
   format, startOfMonth, endOfMonth,
   startOfWeek, endOfWeek, eachDayOfInterval, addWeeks,
@@ -260,23 +260,14 @@ export default function DashboardScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
 
       {/* ══ HEADER ══ */}
-      <Animated.View style={[styles.header, { paddingTop: insets.top + Math.round(10 * vs), opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
-        <View style={styles.headerTopRow}>
-          <View style={styles.logoRow}>
-            <CamusatLogo size={36} showText={false} />
-            <View>
-              <Text style={styles.brandName}>camusat</Text>
-              <Text style={styles.brandSub}>ERH</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.avatarContainer} onPress={() => navigation.navigate('ProfileTab')} activeOpacity={0.8}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials}</Text>
-            </View>
-            <View style={styles.onlineDot} />
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.greeting}>Bonjour, {firstName} 👋</Text>
+      <AppHeader
+        onProfile={() => navigation.navigate('ProfileTab')}
+        onChangePassword={() => navigation.navigate('ProfileTab', { screen: 'ChangePassword' })}
+      />
+      <Animated.View style={[styles.greetBlock, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
+        <Text style={styles.greeting} numberOfLines={1} adjustsFontSizeToFit accessibilityRole="header">
+          Bonjour <Text style={styles.greetName}>{firstName}</Text> 👋
+        </Text>
         <Text style={styles.dateText}>{todayLabel}</Text>
         {(fonction || matricule) && (
           <View style={styles.fonctionBadge}>
@@ -585,14 +576,16 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.success,
     borderWidth: 2, borderColor: COLORS.primary,
   },
-  greeting:     { color: COLORS.white, fontSize: 22, fontWeight: 'bold' },
-  dateText:     { color: 'rgba(255,255,255,0.65)', fontSize: 12, marginTop: 3, textTransform: 'capitalize' },
+  greetBlock:   { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+  greeting:     { color: COLORS.primary, fontSize: 24, fontWeight: '700' },
+  greetName:    { fontWeight: '900' },
+  dateText:     { color: COLORS.textSecondary, fontSize: 12, marginTop: 3, textTransform: 'capitalize', fontWeight: '600' },
   fonctionBadge: {
     marginTop: 10, alignSelf: 'flex-start',
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: COLORS.blue100,
     paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
   },
-  fonctionText: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '500' },
+  fonctionText: { color: COLORS.primary, fontSize: 11, fontWeight: '800' },
 
   // ── Labels de section ──
   sectionLabel:     { flexDirection: 'row', alignItems: 'center' },
@@ -627,7 +620,7 @@ const styles = StyleSheet.create({
 
   // ── Carte pointage du jour ──
   ptCard: {
-    marginHorizontal: 4,
+    marginHorizontal: 4, borderWidth: 1, borderColor: COLORS.border,
     backgroundColor: COLORS.white, borderRadius: 16, padding: 16,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 6, elevation: 3,
