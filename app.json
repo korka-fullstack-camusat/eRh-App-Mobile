@@ -2,7 +2,7 @@
   "expo": {
     "name": "eRH-Camusat",
     "slug": "erh-app-mobile",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "sdkVersion": "54.0.0",
@@ -16,7 +16,7 @@
     },
     "android": {
       "package": "com.camusat.erh.mobile",
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
