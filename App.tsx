@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { EmployeeProvider } from '@/contexts/EmployeeContext';
 import AppNavigator from '@/navigation/AppNavigator';
+import UpdatePrompt from '@/components/UpdatePrompt';
 import { theme } from '@/theme';
 
 export default function App() {
@@ -18,6 +19,7 @@ export default function App() {
             <EmployeeProvider>
               <StatusBar style="light" />
               <AppNavigator />
+              <UpdatePrompt />
             </EmployeeProvider>
           </AuthProvider>
         </PaperProvider>

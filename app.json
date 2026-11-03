@@ -2,7 +2,7 @@
   "expo": {
     "name": "eRH-Camusat",
     "slug": "erh-app-mobile",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "sdkVersion": "54.0.0",
@@ -16,7 +16,7 @@
     },
     "android": {
       "package": "com.camusat.erh.mobile",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
@@ -33,7 +33,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#FFFFFF"
         }
-      ]
+      ],
+      "expo-updates"
     ],
     "icon": "./assets/icon.png",
     "web": {
@@ -47,6 +48,19 @@
     },
     "experiments": {
       "baseUrl": "/m"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/b412e9fa-c9a5-434b-bc3f-414698abad78",
+      "checkAutomatically": "NEVER",
+      "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b412e9fa-c9a5-434b-bc3f-414698abad78"
+      }
     }
   }
 }

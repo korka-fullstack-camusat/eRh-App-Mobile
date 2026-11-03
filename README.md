@@ -100,3 +100,26 @@ npx eas-cli build --platform ios --profile ios-simulator
 
 Identifiant de l'app : `com.camusat.erh.mobile` — à créer dans App Store Connect avec le même identifiant.
 Le numéro de build iOS s'incrémente automatiquement à chaque build `production`.
+
+## Mises à jour depuis l'app (bouton « Mettre à jour »)
+
+L'app vérifie au démarrage et au retour au premier plan s'il y a une nouvelle version. Si oui, un bandeau
+« Mise à jour disponible » avec un bouton **Mettre à jour** s'affiche en haut de l'écran.
+
+### Cas 1 — changement des écrans ou de la logique (le plus courant) : aucune réinstallation
+```bash
+npx eas-cli update --branch production --message "Description du changement"
+```
+Les téléphones reçoivent la mise à jour : bandeau → **Mettre à jour** → l'app télécharge, redémarre, et c'est fait.
+Pas de nouvel APK, pas de nouveau téléchargement. Fonctionne pour les APK construits avec la même `version` (app.json).
+
+### Cas 2 — changement natif (nouvelle bibliothèque, icône, permissions) : nouvel APK
+1. Dans `app.json`, augmentez `version` (ex. 1.0.3) **et** `android.versionCode` (ex. 4).
+2. `npx eas-cli build --platform android --profile apk`, puis déposez l'APK dans `downloads/erh-camusat.apk` du serveur.
+3. Sur le serveur du frontend : `./scripts/set-app-version.sh 4 1.0.3`.
+Les téléphones affichent le bandeau, le bouton **Mettre à jour** ouvre le téléchargement de l'APK et Android propose
+l'installation (Android demande toujours une confirmation pour installer un APK).
+
+### Première fois
+Les téléphones doivent d'abord installer **un APK construit avec cette configuration** (version 1.0.2, versionCode 3) :
+c'est l'APK qui contient le système de mise à jour. Ensuite, les mises à jour du cas 1 n'ont plus besoin d'APK.
