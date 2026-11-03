@@ -16,6 +16,7 @@ import {
 } from '@/services/leaveService';
 import type { LeaveRequest, LeaveStatus } from '@/types/leave';
 import { COLORS } from '@/theme';
+import ExitApprovalsSection from './ExitApprovalsSection';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -43,7 +44,7 @@ function initials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
 }
 
-export default function LeaveApprobationScreen() {
+function LeaveApprovalsContent() {
   const { user } = useAuth();
   const managerEmployeeId = user?.employee_id ?? null;
   const isRh = user?.roles?.includes('rh') ?? false;
@@ -670,4 +671,35 @@ const styles = StyleSheet.create({
   },
   modalBtnText: { color: COLORS.white, fontSize: 15, fontWeight: '700' },
   disabled: { opacity: 0.6 },
+});
+
+/** Écran Approbation : choix entre les congés et les sorties de l'équipe. */
+export default function LeaveApprobationScreen() {
+  const { user } = useAuth();
+  const managerEmployeeId = user?.employee_id ?? null;
+  const [mode, setMode] = useState<'leave' | 'exit'>('leave');
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }} edges={['bottom']}>
+      {!!managerEmployeeId && (
+        <View style={modeStyles.wrap} accessibilityRole="tablist">
+          {([['leave', 'Congés', 'calendar-outline'], ['exit', 'Sorties', 'log-out-outline']] as const).map(([k, label, icon]) => (
+            <TouchableOpacity key={k} onPress={() => setMode(k)} accessibilityRole="tab" accessibilityState={{ selected: mode === k }}
+              style={[modeStyles.btn, mode === k && modeStyles.btnOn]} activeOpacity={0.85}>
+              <Ionicons name={icon} size={16} color={mode === k ? COLORS.primary : COLORS.textSecondary} />
+              <Text style={[modeStyles.text, mode === k && modeStyles.textOn]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+      {mode === 'exit' && managerEmployeeId ? <ExitApprovalsSection managerId={managerEmployeeId} /> : <LeaveApprovalsContent />}
+    </SafeAreaView>
+  );
+}
+
+const modeStyles = StyleSheet.create({
+  wrap: { flexDirection: 'row', backgroundColor: COLORS.blue50, borderRadius: 14, padding: 4, gap: 4, marginHorizontal: 16, marginTop: 12 },
+  btn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 10 },
+  btnOn: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, elevation: 1 },
+  text: { fontSize: 13, fontWeight: '800', color: COLORS.textSecondary },
+  textOn: { color: COLORS.primary },
 });

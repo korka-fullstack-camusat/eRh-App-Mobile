@@ -112,7 +112,7 @@ export default function MainNavigator() {
         options={{ title: 'Demandes', header: () => <CustomHeader title="Mes demandes" /> }} />
       {managerAccess && (
         <Tab.Screen name="ApprobationTab" component={LeaveApprobationScreen}
-          options={{ title: 'Approbation', header: () => <CustomHeader title="Approbation congés" /> }} />
+          options={{ title: 'Approbation', header: () => <CustomHeader title="Approbations" /> }} />
       )}
       {!isTechnicien && (
         <Tab.Screen name="PayslipsTab" component={PayslipsScreen}

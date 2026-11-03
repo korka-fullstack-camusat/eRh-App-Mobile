@@ -173,3 +173,36 @@ export async function uploadExitJustif(
   });
   return data;
 }
+
+// ── Sorties : validation par le manager ──────────────────────────────────────
+
+export async function getManagerExitAuthorizations(
+  managerEmployeeId: number,
+  statuses: ExitAuthorization['status'][],
+): Promise<ExitAuthorization[]> {
+  const results = await Promise.all(
+    statuses.map(s =>
+      api.get('/api/leaves/exit-authorizations/', {
+        params: { manager_employee_id: managerEmployeeId, status: s },
+      }).then(r => (Array.isArray(r.data) ? r.data : r.data?.results ?? []) as ExitAuthorization[]),
+    ),
+  );
+  return results.flat().sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+}
+
+export async function approveExitAuthorization(id: number, reviewerEmployeeId: number): Promise<ExitAuthorization> {
+  const { data } = await api.post<ExitAuthorization>(`/api/leaves/exit-authorizations/${id}/approve/`, {
+    reviewer_id: reviewerEmployeeId,
+  });
+  return data;
+}
+
+export async function rejectExitAuthorization(
+  id: number, rejectReason: string, reviewerEmployeeId: number,
+): Promise<ExitAuthorization> {
+  const { data } = await api.post<ExitAuthorization>(`/api/leaves/exit-authorizations/${id}/reject/`, {
+    reject_reason: rejectReason,
+    reviewer_id: reviewerEmployeeId,
+  });
+  return data;
+}
