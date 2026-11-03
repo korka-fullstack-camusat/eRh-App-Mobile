@@ -130,6 +130,10 @@ export interface ExitAuthorization {
   reviewed_by_id?: number;
   reviewed_at?: string;
   reject_reason?: string;
+  n1_manager_name?: string | null;
+  justif_required?: boolean;
+  justif_file?: string | null;
+  justif_validated?: boolean;
   created_at: string;
   updated_at: string;
 }

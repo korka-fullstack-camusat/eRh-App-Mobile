@@ -17,6 +17,7 @@ import { COLORS } from '@/theme';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import * as DocumentPicker from 'expo-document-picker';
+import ExitRequestsSection from './ExitRequestsSection';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -131,6 +132,7 @@ export default function LeavesScreen() {
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [mode, setMode] = useState<'leave' | 'exit'>('leave');
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
   const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
@@ -479,6 +481,19 @@ export default function LeavesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
 
+      {/* Choix du type de demande : Congé / Sortie */}
+      <View style={styles.modeWrap} accessibilityRole="tablist">
+        {([['leave', 'Congés', 'calendar-outline'], ['exit', 'Sorties', 'log-out-outline']] as const).map(([k, label, icon]) => (
+          <TouchableOpacity key={k} onPress={() => setMode(k)} accessibilityRole="tab" accessibilityState={{ selected: mode === k }}
+            style={[styles.modeBtn, mode === k && styles.modeBtnOn]} activeOpacity={0.85}>
+            <Ionicons name={icon} size={16} color={mode === k ? COLORS.primary : COLORS.textSecondary} />
+            <Text style={[styles.modeText, mode === k && styles.modeTextOn]}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {mode === 'exit' ? <ExitRequestsSection /> : (
+        <>
       {/* Ligne solde + bouton Nouvelle demande */}
       <View style={styles.soldeRow}>
         <View>
@@ -516,6 +531,9 @@ export default function LeavesScreen() {
             </View>
           )}
         </ScrollView>
+      )}
+
+        </>
       )}
 
       {/* ══════════════ MODAL DÉTAIL CONGÉ ══════════════ */}
@@ -967,6 +985,11 @@ function InfoTile({ icon, label, value }: { icon: string; label: string; value: 
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  modeWrap: { flexDirection: 'row', backgroundColor: COLORS.blue50, borderRadius: 14, padding: 4, gap: 4, marginHorizontal: 16, marginTop: 12 },
+  modeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 10 },
+  modeBtnOn: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 4, elevation: 1 },
+  modeText: { fontSize: 13, fontWeight: '800', color: COLORS.textSecondary },
+  modeTextOn: { color: COLORS.primary },
   container: { flex: 1, backgroundColor: COLORS.background },
 
 

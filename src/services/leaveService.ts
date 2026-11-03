@@ -157,3 +157,19 @@ export async function cancelExitAuthorization(id: number): Promise<ExitAuthoriza
   const { data } = await api.post<ExitAuthorization>(`/api/leaves/exit-authorizations/${id}/cancel/`);
   return data;
 }
+
+export async function uploadExitJustif(
+  id: number,
+  file: { uri: string; name: string; mimeType?: string },
+): Promise<ExitAuthorization> {
+  const form = new FormData();
+  form.append('justif_file', {
+    uri: file.uri,
+    name: file.name,
+    type: file.mimeType ?? 'application/octet-stream',
+  } as any);
+  const { data } = await api.patch<ExitAuthorization>(`/api/leaves/exit-authorizations/${id}/upload-justif/`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
