@@ -373,7 +373,7 @@ export default function DashboardScreen() {
         )}
 
         {/* ════════════ NOTIFICATIONS (managers) ════════════ */}
-        {isManagerUser && (
+        {isManagerUser && notifs.length > 0 && (
           <>
             <View style={styles.secHead}>
               <Ionicons name="notifications-outline" size={18} color={COLORS.primary} />
@@ -382,15 +382,6 @@ export default function DashboardScreen() {
                 <View style={styles.countBadge}><Text style={styles.countBadgeText}>{notifs.length}</Text></View>
               )}
             </View>
-            {notifs.length === 0 ? (
-              <View style={styles.row}>
-                <View style={[styles.rowIcon, { backgroundColor: COLORS.green100 }]}>
-                  <Ionicons name="checkmark-circle-outline" size={22} color={COLORS.success} />
-                </View>
-                <Text style={[styles.rowSub, { flex: 1, marginTop: 0 }]}>Aucune demande en attente de validation.</Text>
-              </View>
-            ) : (
-              <>
                 {notifs.slice(0, 5).map(n => (
                   <TouchableOpacity key={n.key} style={styles.row} activeOpacity={0.85} accessibilityRole="button"
                     accessibilityLabel={`${n.title}. ${n.sub}`}
@@ -410,8 +401,6 @@ export default function DashboardScreen() {
                     <Text style={styles.moreText}>Voir les {notifs.length} demandes</Text>
                   </TouchableOpacity>
                 )}
-              </>
-            )}
           </>
         )}
       </ScrollView>
