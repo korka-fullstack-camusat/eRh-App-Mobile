@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployee } from '@/contexts/EmployeeContext';
-import { getMyLeaveBalances, getManagerLeaves, getManagerExitAuthorizations } from '@/services/leaveService';
+import { getMyLeaveBalances } from '@/services/leaveService';
 import { getMyAttendance } from '@/services/attendanceService';
 import { getAvailableBulletins, requestPayslipAccess } from '@/services/employeeService';
 import type { LeaveBalance } from '@/types/leave';
@@ -82,7 +82,6 @@ export default function DashboardScreen() {
   const [allDays,        setAllDays]       = useState<EmployeePeriodDetailDay[]>([]);
   const [refreshing,     setRefreshing]    = useState(false);
   const [bulletinsCount, setBulletinsCount] = useState(0);
-  const [toApprove,      setToApprove]     = useState(0);
 
   // Modal demande bulletins antérieurs
   const [requestModal,   setRequestModal]   = useState(false);
@@ -133,23 +132,13 @@ export default function DashboardScreen() {
     if (!isTech && employee.matricule) {
       promises.push(getAvailableBulletins(employee.matricule));
     }
-    const managerId = user?.employee_id ?? null;
-    const isMgr = !!managerId && !!user?.roles && (user.roles.includes('manager1') || user.roles.includes('manager2') || user.roles.includes('rh'));
-    if (isMgr && managerId) {
-      Promise.allSettled([
-        getManagerLeaves(managerId, ['PENDING', 'PENDING_SECOND', 'PENDING_RH']),
-        getManagerExitAuthorizations(managerId, ['PENDING']),
-      ]).then(([l, e]) => setToApprove(
-        (l.status === 'fulfilled' ? l.value.length : 0) + (e.status === 'fulfilled' ? e.value.length : 0),
-      ));
-    }
     const [bal, att, bul] = await Promise.allSettled(promises);
     if (bal.status === 'fulfilled') setBalances(bal.value);
     if (att.status === 'fulfilled') setAllDays(att.value.days ?? []);
     if (bul && bul.status === 'fulfilled') {
       setBulletinsCount(Array.isArray(bul.value) ? bul.value.length : 0);
     }
-  }, [employee, user]);
+  }, [employee]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -264,16 +253,10 @@ export default function DashboardScreen() {
   };
 
   // ── Raccourcis (même principe que l'accueil Inventory) ──
-  const isManagerUser = !!user?.roles && (user.roles.includes('manager1') || user.roles.includes('manager2') || user.roles.includes('rh'));
   type Tile = { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; badge?: number; go: () => void };
   const tiles: Tile[] = [
     { key: 'leave', label: 'Demande de congé', icon: 'calendar-outline', go: () => navigation.navigate('LeavesTab', { mode: 'leave', ts: Date.now() }) },
     { key: 'exit', label: 'Demande de sortie', icon: 'log-out-outline', go: () => navigation.navigate('LeavesTab', { mode: 'exit', ts: Date.now() }) },
-    { key: 'att', label: 'Demande d’attestation', icon: 'ribbon-outline', go: () => navigation.navigate('LeavesTab', { mode: 'attestation', ts: Date.now() }) },
-    ...(!isTechnicien && bulletinsCount > 0 ? [{ key: 'pay', label: 'Mes bulletins', icon: 'document-text-outline' as const, badge: bulletinsCount, go: () => navigation.navigate('PayslipsTab') }] : []),
-    ...(!isTechnicien ? [{ key: 'week', label: 'Mon pointage', icon: 'time-outline' as const, go: openWeekModal }] : []),
-    ...(isManagerUser ? [{ key: 'appr', label: 'Approbations', icon: 'checkmark-done-outline' as const, badge: toApprove, go: () => navigation.navigate('ApprobationTab') }] : []),
-    { key: 'profile', label: 'Mon profil', icon: 'person-outline', go: () => navigation.navigate('ProfileTab') },
   ];
 
   if (empLoading) {
@@ -539,9 +522,9 @@ export default function DashboardScreen() {
 const styles = StyleSheet.create({
   soldeCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginHorizontal: 16, marginTop: 14,
-    borderWidth: 1, borderColor: COLORS.border, borderRadius: 18, backgroundColor: COLORS.blue50,
+    borderWidth: 2, borderColor: COLORS.primary, borderRadius: 18, backgroundColor: COLORS.white,
   },
-  soldeIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  soldeIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: COLORS.blue50, alignItems: 'center', justifyContent: 'center' },
   soldeLabel: { fontSize: 12, fontWeight: '800', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6 },
   soldeNum: { fontSize: 36, fontWeight: '900', color: COLORS.primary, lineHeight: 42 },
   soldeUnit: { fontSize: 14, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 6 },
