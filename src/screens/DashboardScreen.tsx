@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useEmployee } from '@/contexts/EmployeeContext';
-import { getMyLeaveBalances } from '@/services/leaveService';
+import { getMyLeaveBalances, getManagerLeaves, getManagerExitAuthorizations } from '@/services/leaveService';
 import { getMyAttendance } from '@/services/attendanceService';
 import { getAvailableBulletins, requestPayslipAccess } from '@/services/employeeService';
 import type { LeaveBalance } from '@/types/leave';
@@ -82,6 +82,7 @@ export default function DashboardScreen() {
   const [allDays,        setAllDays]       = useState<EmployeePeriodDetailDay[]>([]);
   const [refreshing,     setRefreshing]    = useState(false);
   const [bulletinsCount, setBulletinsCount] = useState(0);
+  const [toApprove,      setToApprove]     = useState(0);
 
   // Modal demande bulletins antérieurs
   const [requestModal,   setRequestModal]   = useState(false);
@@ -132,13 +133,23 @@ export default function DashboardScreen() {
     if (!isTech && employee.matricule) {
       promises.push(getAvailableBulletins(employee.matricule));
     }
+    const managerId = user?.employee_id ?? null;
+    const isMgr = !!managerId && !!user?.roles && (user.roles.includes('manager1') || user.roles.includes('manager2') || user.roles.includes('rh'));
+    if (isMgr && managerId) {
+      Promise.allSettled([
+        getManagerLeaves(managerId, ['PENDING', 'PENDING_SECOND', 'PENDING_RH']),
+        getManagerExitAuthorizations(managerId, ['PENDING']),
+      ]).then(([l, e]) => setToApprove(
+        (l.status === 'fulfilled' ? l.value.length : 0) + (e.status === 'fulfilled' ? e.value.length : 0),
+      ));
+    }
     const [bal, att, bul] = await Promise.allSettled(promises);
     if (bal.status === 'fulfilled') setBalances(bal.value);
     if (att.status === 'fulfilled') setAllDays(att.value.days ?? []);
     if (bul && bul.status === 'fulfilled') {
       setBulletinsCount(Array.isArray(bul.value) ? bul.value.length : 0);
     }
-  }, [employee]);
+  }, [employee, user]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -252,6 +263,18 @@ export default function DashboardScreen() {
     setReqSent(false);
   };
 
+  // ── Raccourcis (même principe que l'accueil Inventory) ──
+  const isManagerUser = !!user?.roles && (user.roles.includes('manager1') || user.roles.includes('manager2') || user.roles.includes('rh'));
+  type Tile = { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; badge?: number; go: () => void };
+  const tiles: Tile[] = [
+    { key: 'leave', label: 'Demander un congé', icon: 'calendar-outline', go: () => navigation.navigate('LeavesTab', { mode: 'leave', ts: Date.now() }) },
+    { key: 'exit', label: 'Demander une sortie', icon: 'log-out-outline', go: () => navigation.navigate('LeavesTab', { mode: 'exit', ts: Date.now() }) },
+    ...(!isTechnicien ? [{ key: 'pay', label: 'Mes bulletins', icon: 'document-text-outline' as const, badge: bulletinsCount, go: () => navigation.navigate('PayslipsTab') }] : []),
+    ...(!isTechnicien ? [{ key: 'week', label: 'Mon pointage', icon: 'time-outline' as const, go: openWeekModal }] : []),
+    ...(isManagerUser ? [{ key: 'appr', label: 'Approbations', icon: 'checkmark-done-outline' as const, badge: toApprove, go: () => navigation.navigate('ApprobationTab') }] : []),
+    { key: 'profile', label: 'Mon profil', icon: 'person-outline', go: () => navigation.navigate('ProfileTab') },
+  ];
+
   if (empLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
   }
@@ -285,117 +308,100 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ════════════ 1. SOLDE DE CONGÉS ════════════ */}
-        <Animated.View style={[styles.soldeBanner, { opacity: card2Fade, transform: [{ translateY: card2Slide }] }]}>
-          <Text style={styles.soldeBannerLabel}>SOLDE DISPONIBLE</Text>
-          <View style={styles.soldeBannerRow}>
-            <Text style={styles.soldeBannerNum}>{Math.round(remainingDays)}</Text>
-            <Text style={styles.soldeBannerUnit}> jours</Text>
-          </View>
-          <TouchableOpacity onPress={() => navigation.navigate('LeavesTab')} style={styles.soldeBannerVoir}>
-            <Text style={styles.soldeBannerVoirText}>Voir mes congés →</Text>
-          </TouchableOpacity>
-        </Animated.View>
-
-        {/* ════════════ 2. POINTAGE DU JOUR ════════════ */}
-        {!isTechnicien && (
-          <Animated.View style={{ opacity: card3Fade, transform: [{ translateY: card3Slide }] }}>
-            <Text style={styles.sectionLabelText}>Pointage du jour</Text>
-            <View style={styles.ptCard}>
-              <View style={styles.ptCardHeader}>
-                <View style={styles.ptCardTitleRow}>
-                  <Text style={styles.ptCardTitle}>
-                    {format(today, 'EEEE d MMMM', { locale: fr })}
-                  </Text>
-                </View>
-                {todayRecord && (
-                  <View style={[styles.statusPill, { borderColor: statusColor(todayStatus) }]}>
-                    <View style={[styles.statusDot, { backgroundColor: statusColor(todayStatus) }]} />
-                    <Text style={[styles.statusPillText, { color: statusColor(todayStatus) }]}>
-                      {statusLabel(todayStatus)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-              <View style={styles.timeBoxRow}>
-                <View style={[styles.timeBox, entreeTime !== '--:--' ? styles.timeBoxActive : styles.timeBoxInactive]}>
-                  <Text style={styles.timeBoxLabel}>ENTRÉE</Text>
-                  <Text style={[styles.timeBoxValue, { color: entreeTime !== '--:--' ? COLORS.success : COLORS.textSecondary }]}>
-                    {entreeTime}
-                  </Text>
-                </View>
-                <View style={styles.timeSeparator}>
-                  <Ionicons name="arrow-forward" size={18} color={COLORS.textSecondary} />
-                </View>
-                <View style={[styles.timeBox, sortieTime !== '--:--' ? styles.timeBoxActive : styles.timeBoxInactive]}>
-                  <Text style={styles.timeBoxLabel}>SORTIE</Text>
-                  <Text style={[styles.timeBoxValue, { color: sortieTime !== '--:--' ? COLORS.success : COLORS.textSecondary }]}>
-                    {sortieTime}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.ptFooterRow}>
-                <Text style={styles.ptDurationText}>
-                  {workedMin != null ? `Travaillé : ${minutesToHM(workedMin)}` : "Aucune donnée pour aujourd'hui"}
-                </Text>
-                <TouchableOpacity onPress={openWeekModal} style={styles.ptWeekBtn}>
-                  <Ionicons name="calendar-outline" size={14} color={COLORS.primary} />
-                  <Text style={styles.ptWeekLinkText}>Vue semaine</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </Animated.View>
-        )}
-
-        {/* ════════════ 3. BULLETINS DE SALAIRE ════════════ */}
-        {!isTechnicien && (
-          <>
-            <Text style={styles.sectionLabelText}>Bulletins de salaire</Text>
+        {/* ════════════ RACCOURCIS ════════════ */}
+        <View style={styles.secHead}>
+          <Ionicons name="flash-outline" size={18} color={COLORS.primary} />
+          <Text style={styles.secTitle}>Accès rapide</Text>
+        </View>
+        <View style={styles.grid}>
+          {tiles.map(t => (
             <TouchableOpacity
-              style={[styles.bulletinCard, bulletinsCount === 0 && styles.bulletinCardEmpty]}
+              key={t.key}
+              style={styles.tile}
+              onPress={t.go}
               activeOpacity={0.85}
-              onPress={() => navigation.navigate('PayslipsTab')}
+              accessibilityRole="button"
+              accessibilityLabel={t.badge ? `${t.label}, ${t.badge} en attente` : t.label}
             >
-              <View style={[styles.bulletinIconWrap, bulletinsCount === 0 && styles.bulletinIconWrapEmpty]}>
-                <Ionicons name="document-text" size={22} color={COLORS.white} />
-              </View>
-              <View style={{ flex: 1 }}>
-                {bulletinsCount > 0 ? (
-                  <>
-                    <Text style={styles.bulletinTitle}>
-                      {bulletinsCount === 1 ? '1 bulletin disponible' : `${bulletinsCount} bulletins disponibles`}
-                    </Text>
-                    <Text style={styles.bulletinSub}>
-                      {format(today, 'MMMM yyyy', { locale: fr })} · Appuyez pour consulter
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.bulletinTitleEmpty}>Aucun bulletin ce mois-ci</Text>
-                    <Text style={styles.bulletinSubEmpty}>
-                      {format(today, 'MMMM yyyy', { locale: fr })}
-                    </Text>
-                  </>
+              <View style={styles.tileIcon}>
+                <Ionicons name={t.icon} size={34} color={COLORS.primary} />
+                {!!t.badge && (
+                  <View style={styles.tileBadge}><Text style={styles.tileBadgeText}>{t.badge}</Text></View>
                 )}
               </View>
-              {bulletinsCount > 0 && (
-                <View style={styles.bulletinBadge}>
-                  <Text style={styles.bulletinBadgeText}>{bulletinsCount}</Text>
-                </View>
-              )}
+              <Text style={styles.tileLabel} numberOfLines={2}>{t.label}</Text>
             </TouchableOpacity>
-          </>
+          ))}
+        </View>
+
+        {/* ════════════ NOTIFICATIONS / INFOS ════════════ */}
+        <View style={styles.secHead}>
+          <Ionicons name="notifications-outline" size={18} color={COLORS.primary} />
+          <Text style={styles.secTitle}>Aujourd'hui</Text>
+        </View>
+
+        <TouchableOpacity style={styles.row} activeOpacity={0.85} accessibilityRole="button"
+          onPress={() => navigation.navigate('LeavesTab', { mode: 'leave', ts: Date.now() })}>
+          <View style={[styles.rowIcon, { backgroundColor: COLORS.blue100 }]}>
+            <Ionicons name="sunny-outline" size={20} color={COLORS.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle}>Solde de congés</Text>
+            <Text style={styles.rowSub}>{Math.round(remainingDays)} jour(s) disponible(s)</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+        </TouchableOpacity>
+
+        {isManagerUser && toApprove > 0 && (
+          <TouchableOpacity style={styles.row} activeOpacity={0.85} accessibilityRole="button"
+            onPress={() => navigation.navigate('ApprobationTab')}>
+            <View style={[styles.rowIcon, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="checkmark-done-outline" size={20} color="#B45309" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>Demandes à valider</Text>
+              <Text style={styles.rowSub}>{toApprove} demande(s) de votre équipe en attente</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
         )}
 
-        {/* ── ZONE NOTIFICATIONS (techniciens uniquement) ── */}
-        {isTechnicien && (
-          <View style={styles.notifSection}>
-            <Text style={styles.notifSectionTitle}>Notifications</Text>
-            <View style={styles.notifEmpty}>
-              <Ionicons name="checkmark-circle-outline" size={32} color={COLORS.success} />
-              <Text style={styles.notifEmptyText}>Aucune notification pour le moment</Text>
+        {!isTechnicien && bulletinsCount > 0 && (
+          <TouchableOpacity style={styles.row} activeOpacity={0.85} accessibilityRole="button"
+            onPress={() => navigation.navigate('PayslipsTab')}>
+            <View style={[styles.rowIcon, { backgroundColor: COLORS.green100 }]}>
+              <Ionicons name="document-text-outline" size={20} color={COLORS.primary} />
             </View>
-          </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>
+                {bulletinsCount === 1 ? '1 bulletin disponible' : `${bulletinsCount} bulletins disponibles`}
+              </Text>
+              <Text style={styles.rowSub}>{format(today, 'MMMM yyyy', { locale: fr })} · Appuyez pour consulter</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+        )}
+
+        {!isTechnicien && (
+          <TouchableOpacity style={styles.row} activeOpacity={0.85} accessibilityRole="button" onPress={openWeekModal}>
+            <View style={[styles.rowIcon, { backgroundColor: COLORS.blue100 }]}>
+              <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>Pointage du jour</Text>
+              <Text style={styles.rowSub}>
+                {todayRecord
+                  ? `Entrée ${entreeTime} · Sortie ${sortieTime}${workedMin != null ? ` · ${minutesToHM(workedMin)}` : ''}`
+                  : "Aucune donnée pour aujourd'hui"}
+              </Text>
+            </View>
+            {todayRecord && (
+              <View style={[styles.statusPill, { borderColor: statusColor(todayStatus) }]}>
+                <View style={[styles.statusDot, { backgroundColor: statusColor(todayStatus) }]} />
+                <Text style={[styles.statusPillText, { color: statusColor(todayStatus) }]}>{statusLabel(todayStatus)}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         )}
       </ScrollView>
 
@@ -545,10 +551,31 @@ export default function DashboardScreen() {
 // ─── Styles (responsive — base 750 dp height / 390 dp width) ─────────────────
 
 const styles = StyleSheet.create({
+  secHead:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 20, marginBottom: 2, marginHorizontal: 16 },
+  secTitle: { fontSize: 15, fontWeight: '900', color: COLORS.primary },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginHorizontal: 16, marginTop: 10 },
+  tile: {
+    width: '48%', flexGrow: 1, minHeight: 124, padding: 12, gap: 8,
+    borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, backgroundColor: COLORS.blue50,
+  },
+  tileIcon: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tileLabel: { fontSize: 14, fontWeight: '900', color: COLORS.primary, textAlign: 'center' },
+  tileBadge: {
+    position: 'absolute', top: 0, right: '22%', minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6,
+    backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center',
+  },
+  tileBadgeText: { color: '#fff', fontWeight: '900', fontSize: 12 },
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, marginHorizontal: 16, marginTop: 10,
+    borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, backgroundColor: '#fff',
+  },
+  rowIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  rowTitle: { fontSize: 15, fontWeight: '900', color: COLORS.primary },
+  rowSub: { fontSize: 13, color: COLORS.text, opacity: 0.75, marginTop: 2, fontWeight: '600' },
   container:  { flex: 1, backgroundColor: COLORS.background },
   center:     { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollView: { flex: 1, backgroundColor: COLORS.background },
-  scroll:     { flexGrow: 1, paddingTop: 10, paddingBottom: 16 },
+  scroll:     { flexGrow: 1, paddingTop: 4, paddingBottom: 24 },
 
   // ── Header ──
   header: {
@@ -600,10 +627,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4, marginTop: 12,
     backgroundColor: COLORS.primary, borderRadius: 16,
     paddingVertical: 24, paddingHorizontal: 20,
-    alignItems: 'center',
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.22, shadowRadius: 8, elevation: 4,
-  },
+    alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
   soldeBannerLabel: {
     fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.6)',
     letterSpacing: 1.8, textTransform: 'uppercase', marginBottom: 8,
@@ -622,8 +646,6 @@ const styles = StyleSheet.create({
   ptCard: {
     marginHorizontal: 4, borderWidth: 1, borderColor: COLORS.border,
     backgroundColor: COLORS.white, borderRadius: 16, padding: 16,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 6, elevation: 3,
   },
   ptCardHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   ptCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -665,14 +687,10 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, borderColor: '#F59E0B',
     borderRadius: 16, padding: 14,
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12, shadowRadius: 5, elevation: 3,
   },
   bulletinCardEmpty: {
     backgroundColor: COLORS.white,
-    borderColor: COLORS.border,
-    shadowColor: '#000', shadowOpacity: 0.04,
-  },
+    borderColor: COLORS.border },
   bulletinIconWrap: {
     width: 42, height: 42, borderRadius: 11,
     backgroundColor: '#F59E0B',
@@ -696,10 +714,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4, marginTop: 8,
     backgroundColor: COLORS.primary, borderRadius: 12,
     paddingVertical: 12, flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'center', gap: 8,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2, shadowRadius: 4, elevation: 3,
-  },
+    alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1, borderColor: COLORS.border },
   reqBtnText: { color: COLORS.white, fontSize: 14, fontWeight: '600' },
 
   // ── Modal demande ──
@@ -799,10 +814,7 @@ const styles = StyleSheet.create({
   statsRow: { flexDirection: 'row', gap: 10, marginHorizontal: 12, marginTop: 14, marginBottom: 10 },
   statCard: {
     flex: 1, backgroundColor: COLORS.white, borderRadius: 14,
-    alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
+    alignItems: 'center', paddingVertical: 14, paddingHorizontal: 8, borderWidth: 1, borderColor: COLORS.border },
   statValue: { fontSize: 20, fontWeight: '800', color: COLORS.text, marginTop: 6, marginBottom: 2 },
   statLabel: { fontSize: 10, color: COLORS.textSecondary, textAlign: 'center', fontWeight: '500' },
 
@@ -822,10 +834,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: COLORS.white,
     marginHorizontal: 12, marginBottom: 3, borderRadius: 10,
-    overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 2, elevation: 1,
-  },
+    overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
   tableRowToday:  { backgroundColor: '#EFF6FF' },
   tableRowStrip:  { width: 4, alignSelf: 'stretch' },
   tableDayName:   { fontSize: 13, fontWeight: '500', color: COLORS.text },

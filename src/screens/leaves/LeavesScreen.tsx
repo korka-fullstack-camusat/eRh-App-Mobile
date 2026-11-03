@@ -5,6 +5,7 @@ import {
   ScrollView, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useEmployee } from '@/contexts/EmployeeContext';
 import {
@@ -133,6 +134,10 @@ export default function LeavesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [mode, setMode] = useState<'leave' | 'exit'>('leave');
+  const route = useRoute<any>();
+  const routeMode = route.params?.mode as 'leave' | 'exit' | undefined;
+  const routeTs = route.params?.ts;
+  useEffect(() => { if (routeMode) setMode(routeMode); }, [routeMode, routeTs]);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [selectedLeave, setSelectedLeave] = useState<LeaveRequest | null>(null);
   const [cancelTarget, setCancelTarget] = useState<LeaveRequest | null>(null);
@@ -998,18 +1003,15 @@ const styles = StyleSheet.create({
   soldeRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     marginHorizontal: 4, marginTop: 10, marginBottom: 10,
-    backgroundColor: COLORS.primary, borderRadius: 16,
-    paddingVertical: 16, paddingHorizontal: 18,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2, shadowRadius: 8, elevation: 4,
-  },
-  soldeLabel: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
-  soldeNum:   { fontSize: 34, fontWeight: '800', color: COLORS.white, lineHeight: 38 },
-  soldeUnit:  { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.75)', marginBottom: 4 },
+    backgroundColor: COLORS.blue50, borderRadius: 16,
+    paddingVertical: 16, paddingHorizontal: 18, borderWidth: 1, borderColor: COLORS.border },
+  soldeLabel: { fontSize: 11, fontWeight: '600', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 },
+  soldeNum:   { fontSize: 34, fontWeight: '800', color: COLORS.primary, lineHeight: 38 },
+  soldeUnit:  { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 4 },
   newDemandBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 14, paddingVertical: 12, borderRadius: 12,
   },
   newDemandBtnText: { color: COLORS.white, fontSize: 13, fontWeight: '700' },
 
@@ -1034,9 +1036,7 @@ const styles = StyleSheet.create({
 
   // Cards
   card: {
-    backgroundColor: COLORS.white, borderRadius: 14, flexDirection: 'row', overflow: 'hidden',
-    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
-  },
+    backgroundColor: COLORS.white, borderRadius: 14, flexDirection: 'row', overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
   cardStripe: { width: 4 },
   cardBody: { flex: 1, padding: 12 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
@@ -1095,9 +1095,7 @@ const styles = StyleSheet.create({
   // Info grid (2 colonnes)
   infoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   infoTile: {
-    width: '47%', backgroundColor: COLORS.white, borderRadius: 12, padding: 12,
-    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 3, elevation: 1,
-  },
+    width: '47%', backgroundColor: COLORS.white, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: COLORS.border },
   infoTileLabel: { fontSize: 10, color: COLORS.textSecondary, textTransform: 'uppercase', fontWeight: '600', letterSpacing: 0.5, marginBottom: 2 },
   infoTileValue: { fontSize: 13, fontWeight: '700', color: COLORS.text },
 

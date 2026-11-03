@@ -296,9 +296,7 @@ const styles = StyleSheet.create({
   kpiRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   kpiCard: {
     flex: 1, backgroundColor: COLORS.white, borderRadius: 12, padding: 10,
-    alignItems: 'center', borderTopWidth: 3,
-    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
-  },
+    alignItems: 'center', borderTopWidth: 3, borderWidth: 1, borderColor: COLORS.border },
   kpiValue: { fontSize: 20, fontWeight: 'bold' },
   kpiLabel: { fontSize: 10, color: COLORS.textSecondary, textAlign: 'center', marginTop: 2 },
 
@@ -314,9 +312,7 @@ const styles = StyleSheet.create({
   // Export
   exportBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 12, marginBottom: 16,
-    shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3,
-  },
+    backgroundColor: COLORS.primary, borderRadius: 12, paddingVertical: 12, marginBottom: 16, borderWidth: 1, borderColor: COLORS.border },
   exportBtnText: { color: COLORS.white, fontSize: 14, fontWeight: '600' },
 
   sectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.text, marginBottom: 10 },
@@ -327,9 +323,7 @@ const styles = StyleSheet.create({
   dayRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: COLORS.white, borderRadius: 12, marginBottom: 8,
-    overflow: 'hidden',
-    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 3, elevation: 1,
-  },
+    overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
   dayStrip: { width: 4, alignSelf: 'stretch' },
   dayDate: { width: 55, padding: 10, alignItems: 'center' },
   dayDateText: { fontSize: 10, color: COLORS.textSecondary, textTransform: 'uppercase' },

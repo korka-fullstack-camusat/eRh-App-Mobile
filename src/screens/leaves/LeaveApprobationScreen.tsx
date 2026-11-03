@@ -551,9 +551,7 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
-  },
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: COLORS.border },
   cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 10 },
   avatar: {
     width: 36, height: 36, borderRadius: 18,
@@ -604,16 +602,12 @@ const styles = StyleSheet.create({
 
   detailCard: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
-  },
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: COLORS.border },
   detailName: { fontSize: 15, fontWeight: '700', color: COLORS.text },
   detailMeta: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
 
   infoCard: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
-  },
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: COLORS.border },
   detailRow: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.background,
@@ -655,9 +649,7 @@ const styles = StyleSheet.create({
   rejectBlockText: { fontSize: 13, color: COLORS.text, lineHeight: 18 },
 
   rejectInputBox: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 14,
-    shadowColor: COLORS.cardShadow, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2,
-  },
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: COLORS.border },
   rejectInputLabel: { fontSize: 14, fontWeight: '600', color: COLORS.danger, marginBottom: 8 },
   rejectInput: {
     borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, padding: 12,

@@ -479,11 +479,6 @@ const reqStyles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: COLORS.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 1,
   },
   row:     { flexDirection: 'row', alignItems: 'center', gap: 10 },
   iconBox: { width: 36, height: 36, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
@@ -532,8 +527,6 @@ const styles = StyleSheet.create({
   monthCard: {
     width: '47%', backgroundColor: COLORS.white, borderRadius: 12,
     padding: 14, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06, shadowRadius: 4, elevation: 2,
     borderWidth: 1, borderColor: COLORS.border,
   },
   monthIcon: {

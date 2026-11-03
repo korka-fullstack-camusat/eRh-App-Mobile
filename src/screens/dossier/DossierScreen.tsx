@@ -378,10 +378,7 @@ const styles = StyleSheet.create({
 
   // ── Sections ──
   section: {
-    backgroundColor: COLORS.white, borderRadius: 14, padding: 16, marginBottom: 12,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05, shadowRadius: 4, elevation: 2,
-  },
+    backgroundColor: COLORS.white, borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   sectionTitle:  { fontSize: 13, fontWeight: '700', color: COLORS.text },
 
@@ -485,10 +482,7 @@ const styles = StyleSheet.create({
   },
   logoutBox: {
     backgroundColor: COLORS.white, borderRadius: 20,
-    padding: 28, width: '100%', alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15, shadowRadius: 20, elevation: 10,
-  },
+    padding: 28, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border },
   logoutIconWrap: {
     width: 60, height: 60, borderRadius: 30,
     backgroundColor: `${COLORS.danger}12`,
