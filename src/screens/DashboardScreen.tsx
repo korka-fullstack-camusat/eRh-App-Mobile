@@ -267,6 +267,7 @@ export default function DashboardScreen() {
   };
 
   // ── Notifications : demandes reçues par un manager ──
+  // (déclaré avant pour savoir si l'accueil a de la place à remplir)
   const isManagerUser = !!user?.roles && (user.roles.includes('manager1') || user.roles.includes('manager2') || user.roles.includes('rh'));
   type Notif = { key: string; kind: 'leave' | 'exit'; title: string; sub: string; at: number };
   const dFr = (iso: string) => { try { return format(new Date(iso), 'd MMM yyyy', { locale: fr }); } catch { return iso; } };
@@ -284,6 +285,8 @@ export default function DashboardScreen() {
       at: new Date(x.created_at).getTime() || 0,
     })),
   ].sort((a, b) => b.at - a.at);
+
+  const fill = !(isManagerUser && notifs.length > 0);   // pas de notification : les deux cartes occupent toute la page
 
   if (empLoading) {
     return <View style={styles.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>;
@@ -314,24 +317,24 @@ export default function DashboardScreen() {
       {/* ══ CONTENU SCROLLABLE ══ */}
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, fill && { flexGrow: 1 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
         showsVerticalScrollIndicator={false}
       >
         {/* ════════════ SOLDE DE CONGÉS ════════════ */}
         <TouchableOpacity
-          style={styles.soldeCard}
+          style={[styles.soldeCard, fill && styles.fillCard]}
           activeOpacity={0.85}
           accessibilityRole="button"
           accessibilityLabel={`Solde de congés : ${Math.round(remainingDays)} jours disponibles`}
           onPress={() => navigation.navigate('LeavesTab', { mode: 'leave', ts: Date.now() })}
         >
-          <View style={styles.soldeIcon}><Ionicons name="sunny-outline" size={26} color={COLORS.primary} /></View>
+          <View style={[styles.soldeIcon, fill && { width: 68, height: 68, borderRadius: 20 }]}><Ionicons name="sunny-outline" size={fill ? 36 : 26} color={COLORS.primary} /></View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.soldeLabel}>Solde de congés</Text>
+            <Text style={[styles.soldeLabel, fill && { fontSize: 14 }]}>Solde de congés</Text>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
-              <Text style={styles.soldeNum}>{Math.round(remainingDays)}</Text>
-              <Text style={styles.soldeUnit}>jour(s) disponible(s)</Text>
+              <Text style={[styles.soldeNum, fill && { fontSize: 80, lineHeight: 88 }]}>{Math.round(remainingDays)}</Text>
+              <Text style={[styles.soldeUnit, fill && { fontSize: 16, marginBottom: 14 }]}>jour(s) disponible(s)</Text>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={22} color={COLORS.textSecondary} />
@@ -339,9 +342,9 @@ export default function DashboardScreen() {
 
         {/* ════════════ POINTAGE JOURNALIER ════════════ */}
         {!isTechnicien && (
-          <View style={styles.ptCard}>
+          <View style={[styles.ptCard, fill && styles.fillCard, fill && { flex: 1.5, justifyContent: 'center' }]}>
             <View style={styles.ptCardHeader}>
-              <Text style={styles.ptCardTitle}>Pointage du jour</Text>
+              <Text style={[styles.ptCardTitle, fill && { fontSize: 18 }]}>Pointage du jour</Text>
               {todayRecord && (
                 <View style={[styles.statusPill, { borderColor: statusColor(todayStatus) }]}>
                   <View style={[styles.statusDot, { backgroundColor: statusColor(todayStatus) }]} />
@@ -352,22 +355,18 @@ export default function DashboardScreen() {
             <View style={styles.timeBoxRow}>
               <View style={[styles.timeBox, entreeTime !== '--:--' ? styles.timeBoxActive : styles.timeBoxInactive]}>
                 <Text style={styles.timeBoxLabel}>ENTRÉE</Text>
-                <Text style={[styles.timeBoxValue, { color: entreeTime !== '--:--' ? COLORS.success : COLORS.textSecondary }]}>{entreeTime}</Text>
+                <Text style={[styles.timeBoxValue, fill && { fontSize: 38 }, { color: entreeTime !== '--:--' ? COLORS.success : COLORS.textSecondary }]}>{entreeTime}</Text>
               </View>
               <View style={styles.timeSeparator}><Ionicons name="arrow-forward" size={18} color={COLORS.textSecondary} /></View>
               <View style={[styles.timeBox, sortieTime !== '--:--' ? styles.timeBoxActive : styles.timeBoxInactive]}>
                 <Text style={styles.timeBoxLabel}>SORTIE</Text>
-                <Text style={[styles.timeBoxValue, { color: sortieTime !== '--:--' ? COLORS.success : COLORS.textSecondary }]}>{sortieTime}</Text>
+                <Text style={[styles.timeBoxValue, fill && { fontSize: 38 }, { color: sortieTime !== '--:--' ? COLORS.success : COLORS.textSecondary }]}>{sortieTime}</Text>
               </View>
             </View>
             <View style={styles.ptFooterRow}>
-              <Text style={styles.ptDurationText}>
+              <Text style={[styles.ptDurationText, fill && { fontSize: 15, fontWeight: '700' }]}>
                 {workedMin != null ? `Travaillé : ${minutesToHM(workedMin)}` : "Aucune donnée pour aujourd'hui"}
               </Text>
-              <TouchableOpacity onPress={openWeekModal} style={styles.ptWeekBtn} accessibilityRole="button" accessibilityLabel="Voir la semaine">
-                <Ionicons name="calendar-outline" size={14} color={COLORS.primary} />
-                <Text style={styles.ptWeekLinkText}>Vue semaine</Text>
-              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -551,13 +550,14 @@ export default function DashboardScreen() {
 // ─── Styles (responsive — base 750 dp height / 390 dp width) ─────────────────
 
 const styles = StyleSheet.create({
+  fillCard: { flex: 1, justifyContent: 'center' },
   countBadge: { minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, backgroundColor: COLORS.danger, alignItems: 'center', justifyContent: 'center' },
   countBadgeText: { color: '#fff', fontWeight: '900', fontSize: 12 },
   moreBtn: { alignSelf: 'center', marginTop: 10, paddingVertical: 8, paddingHorizontal: 14 },
   moreText: { color: COLORS.primary, fontWeight: '800', fontSize: 14 },
   soldeCard: {
     flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, marginHorizontal: 16, marginTop: 14,
-    borderWidth: 2, borderColor: COLORS.primary, borderRadius: 18, backgroundColor: COLORS.white,
+    borderWidth: 4, borderColor: COLORS.primary, borderRadius: 18, backgroundColor: COLORS.white,
   },
   soldeIcon: { width: 52, height: 52, borderRadius: 16, backgroundColor: COLORS.blue50, alignItems: 'center', justifyContent: 'center' },
   soldeLabel: { fontSize: 12, fontWeight: '800', color: COLORS.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6 },
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
   container:  { flex: 1, backgroundColor: COLORS.background },
   center:     { flex: 1, justifyContent: 'center', alignItems: 'center' },
   scrollView: { flex: 1, backgroundColor: COLORS.background },
-  scroll:     { flexGrow: 1, paddingTop: 4, paddingBottom: 24 },
+  scroll:     { flexGrow: 1, paddingTop: 4, paddingBottom: 16 },
 
   // ── Header ──
   header: {
@@ -656,8 +656,8 @@ const styles = StyleSheet.create({
 
   // ── Carte pointage du jour ──
   ptCard: {
-    marginHorizontal: 16, marginTop: 12, borderWidth: 1, borderColor: COLORS.border,
-    backgroundColor: COLORS.white, borderRadius: 16, padding: 16,
+    marginHorizontal: 16, marginTop: 12, borderWidth: 4, borderColor: COLORS.primary,
+    backgroundColor: COLORS.white, borderRadius: 18, padding: 16,
   },
   ptCardHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   ptCardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
