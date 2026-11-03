@@ -3,9 +3,13 @@ import { Platform } from 'react-native';
 import { storage } from '@/platform/storage';
 
 // Version web : même adresse que le site (le serveur web relaie /api vers le backend du pays : Sénégal ou Burkina).
+const PROD_API_URL = 'https://apierh.camusatsn.com';
+// Application installée : seule une adresse https est acceptée (une adresse locale http://192.168… laissée dans un
+// fichier .env ne doit jamais se retrouver dans l'APK). En développement, l'adresse du .env reste utilisable.
+const envUrl = process.env.EXPO_PUBLIC_API_URL || '';
 const BASE_URL = Platform.OS === 'web'
   ? window.location.origin
-  : process.env.EXPO_PUBLIC_API_URL || 'https://apierh.camusatsn.com';
+  : (__DEV__ ? envUrl : (/^https:\/\//i.test(envUrl) ? envUrl : '')) || PROD_API_URL;
 
 const api = axios.create({
   baseURL: BASE_URL,

@@ -125,7 +125,7 @@ export default function LoginScreen() {
       await login({ username: username.trim(), password });
     } catch (error: any) {
       if (!error?.response) {
-        Alert.alert('Erreur réseau', `Impossible de joindre le serveur.\n\nVérifiez que :\n• Votre téléphone est connecté au WiFi\n• L'URL du serveur est correcte\n\nServeur : ${process.env.EXPO_PUBLIC_API_URL || 'non configuré'}`);
+        Alert.alert('Connexion impossible', `Impossible de joindre le serveur.\n\nVérifiez que votre téléphone est connecté à Internet (WiFi ou données mobiles), puis réessayez.${__DEV__ ? `\n\nServeur : ${process.env.EXPO_PUBLIC_API_URL || 'non configuré'}` : ''}`);
         return;
       }
       const st   = error.response.status;
